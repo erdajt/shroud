@@ -21,7 +21,7 @@ function M.new(entry)
   assert(entry.kind == "preload" and initial == entry.identity and type(initial) == "function"
     or entry.kind == "file" and initial == nil, "package entry preload changed; use /reload: " .. name)
   local installed, running, known, cached, poisoned = false, false, false, nil, false
-  local interrupted = false
+  local interrupted, serial = false, 0
   local self = {entry={name=name, kind=entry.kind, identity=entry.identity, path=entry.path, load=source}}
   local wrapper
 
@@ -38,11 +38,27 @@ function M.new(entry)
     assert(rawget(preloads, name) == expected, "package entry preload changed; use /reload: " .. name)
   end
 
-  -- check permits only the recorded value or a cleared cache for the same source.
-  function self.check()
+  -- check verifies cache ownership and per-call selected source execution.
+  function self.check(requested, phase, proof, executed)
+    assert(requested == nil or requested == name, "package entry verification name changed: " .. name)
+    if phase == nil then phase = "validate" end
+    assert(phase == "validate" or phase == "before" or phase == "after", "invalid package entry verification phase")
     validate()
     local value = rawget(loaded, name)
+    if phase == "after" then
+      local valid = type(proof) == "number" and proof >= 0 and proof <= serial and proof % 1 == 0
+        and type(executed) == "boolean" and known and same(value, cached)
+      if valid then
+        if executed then valid = serial > proof else valid = serial == proof end
+      end
+      if not valid then
+        poisoned = true
+        error("package entry execution proof is foreign; use /reload: " .. name)
+      end
+      return
+    end
     assert(value == nil or known and same(value, cached), "package entry cache is foreign; use /reload: " .. name)
+    if phase == "before" then return serial end
   end
 
   wrapper = function()
@@ -53,6 +69,7 @@ function M.new(entry)
     end
     assert(installed, "package entry binding is not installed: " .. name)
     assert(loading(name), "package entry loader requires native require: " .. name)
+    assert(serial < 9007199254740991, "package entry execution serial exhausted; use /reload: " .. name)
     local marker = rawget(loaded, name)
     running = true
     local ok, value = xpcall(source, function(failure) return traceback(describe(failure), 2) end)
@@ -77,7 +94,7 @@ function M.new(entry)
       cached = value
       if value == nil then cached = true end
     end
-    known = true
+    known, serial = true, serial + 1
     return value
   end
   self.wrapper = wrapper
@@ -93,11 +110,14 @@ function M.new(entry)
   -- require uses native caching and verifies the selected source supplied its result.
   function self.require()
     assert(installed, "package entry binding is not installed: " .. name)
-    self.check()
+    local executed = not rawget(loaded, name)
+    local proof = self.check(name, "before", nil, executed)
     local value = native_require(name)
-    self.check()
-    assert(known and same(rawget(loaded, name), cached) and same(value, cached),
-      "package entry require result is foreign; use /reload: " .. name)
+    self.check(name, "after", proof, executed)
+    if not same(value, cached) then
+      poisoned = true
+      error("package entry require result is foreign; use /reload: " .. name)
+    end
     return value
   end
 
