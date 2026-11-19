@@ -6,8 +6,9 @@ local execute = require("wraith.manager.store_execute")
 local copy = require("wraith.manager.spec_fields").copy
 local M = {}
 
-function M.new(specs, settings)
+function M.new(specs, settings, retain_lock)
   local configured, config = {}, options.normalize(settings)
+  local retained = planner.retention(retain_lock)
   for _, spec in ipairs(specs) do configured[#configured + 1] = descriptor(spec) end
   assert(#configured <= 63, "package graph exceeds 63 entries")
   local api, plans, order, serial, active, latest = {}, {}, {}, 0, nil, nil
@@ -67,7 +68,7 @@ function M.new(specs, settings)
     reconcile()
     assert(not active, "a package operation is already running")
     local _, baseline, raw = inspect.read(configured, config)
-    local plan = planner.create(configured, baseline, action, names)
+    local plan = planner.create(configured, baseline, action, names, retained)
     plan.baseline_raw = raw
     serial = serial + 1
     local id = identity .. ":plan:" .. serial

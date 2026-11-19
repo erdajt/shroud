@@ -1,5 +1,20 @@
 local M = {}
 
+-- retention detaches the inactive lock names supplied by the resolved graph.
+function M.retention(value)
+  if value == nil then return {} end
+  assert(type(value) == "table", "retained lock names must be a table")
+  local result, count = {}, 0
+  for name, keep in pairs(value) do
+    require("wraith.manager.spec").name(name)
+    assert(type(keep) == "boolean", "retained lock names must be boolean")
+    count = count + 1
+    assert(count <= 256, "retained lock names exceed 256")
+    result[name] = keep
+  end
+  return result
+end
+
 local function copy(value)
   return wraith.json.decode(wraith.json.encode(value))
 end
@@ -8,9 +23,10 @@ local function equal(left, right)
   return wraith.json.encode(left) == wraith.json.encode(right)
 end
 
-function M.create(specs, lock, action, names)
+function M.create(specs, lock, action, names, retain_lock)
   assert(action == "install" or action == "update" or action == "restore", "unknown package operation")
   specs, lock = copy(specs), copy(lock)
+  local retained = M.retention(retain_lock)
   local indexed, selected, visiting, ordered = {}, {}, {}, {}
   for _, spec in ipairs(specs) do
     assert(not indexed[spec.name], "duplicate package: " .. spec.name)
@@ -68,10 +84,22 @@ function M.create(specs, lock, action, names)
 
   local removed = {}
   if action ~= "restore" then
+    local remaining = {}
     for name in pairs(lock.packages) do
-      if not indexed[name] or indexed[name].source.kind == "local" then removed[#removed + 1] = name end
+      local spec = indexed[name]
+      if spec and spec.source.kind == "local" or not spec and not retained[name] then
+        removed[#removed + 1] = name
+      else
+        remaining[name] = true
+      end
     end
     table.sort(removed)
+    for _, item in ipairs(packages) do
+      if item.source.kind ~= "local" then remaining[item.name] = true end
+    end
+    local count = 0
+    for _ in pairs(remaining) do count = count + 1 end
+    assert(count <= 63, "projected package lock exceeds 63 entries")
   end
   return { action = action, packages = packages, baseline = lock, removed = removed }
 end
