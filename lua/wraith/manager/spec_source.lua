@@ -1,5 +1,24 @@
 local M = {}
 
+-- local_path expands one local root without inspecting the filesystem.
+function M.local_path(location)
+  assert(type(location) == "string" and #location > 0 and #location <= 4096 and not location:find("%c"), "invalid local package directory")
+  if location:sub(1, 1) == "~" then
+    assert(location == "~" or location:sub(1, 2) == "~/", "only the current user's home directory can be expanded")
+    local home = os.getenv("HOME")
+    assert(type(home) == "string" and home:sub(1, 1) == "/", "home directory is unavailable")
+    location = home .. location:sub(2)
+  elseif location:sub(1, 1) ~= "/" then
+    location = wraith.paths.stdpath("config") .. "/" .. location
+  end
+  local parts = {}
+  for part in location:gmatch("[^/]+") do
+    if part == ".." then table.remove(parts) elseif part ~= "." then parts[#parts + 1] = part end
+  end
+  location = "/" .. table.concat(parts, "/")
+  return require("wraith.manager.spec").source({kind="local", dir=location}).dir
+end
+
 -- normalize resolves repository declarations without inspecting the working directory.
 function M.normalize(value)
   assert(value[1] == nil or value.repo == nil, "choose one repository field")
@@ -14,19 +33,7 @@ function M.normalize(value)
   local source
 
   if value.dir ~= nil or repo ~= nil and path then
-    if location:sub(1, 1) == "~" then
-      assert(location == "~" or location:sub(1, 2) == "~/", "only the current user's home directory can be expanded")
-      local home = os.getenv("HOME")
-      assert(type(home) == "string" and home:sub(1, 1) == "/", "home directory is unavailable")
-      location = home .. location:sub(2)
-    elseif location:sub(1, 1) ~= "/" then
-      location = wraith.paths.stdpath("config") .. "/" .. location
-    end
-    local parts = {}
-    for part in location:gmatch("[^/]+") do
-      if part == ".." then table.remove(parts) elseif part ~= "." then parts[#parts + 1] = part end
-    end
-    location = "/" .. table.concat(parts, "/")
+    location = M.local_path(location)
     source = {kind="local", dir=location}
   elseif repo ~= nil and location:match("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$") then
     source = {kind="git", url="https://github.com/" .. location .. (location:sub(-4) == ".git" and "" or ".git")}
