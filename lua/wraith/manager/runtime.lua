@@ -86,6 +86,9 @@ function M.status()
     row.installed = row.path ~= nil
     row.lazy = state.graph.by_name[row.name].lazy
     row.loaded_commit = row.loaded and chosen and chosen.commit or nil
+    for _, field in ipairs({"requested_main", "selected_main", "loaded_main", "main_source_kind", "main_source_path"}) do
+      row[field] = states[row.name][field]
+    end
     row.restart_required = not chosen or row.path ~= chosen.path or row.commit ~= chosen.commit
     if not row.managed then row.state = "unloaded" end
   end

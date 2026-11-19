@@ -161,7 +161,7 @@ function M.normalize(value, descriptor, dependency)
   value = M.declaration(value)
   local source, basename = sources.normalize(value)
   local result = descriptor({name=value.name == nil and basename:lower() or value.name, source=source, selector=revision(value), pin=value.pin})
-  result.main = M.main(value.main == nil and basename or value.main)
+  result.main = value.main ~= nil and M.main(value.main) or nil
   result.priority = value.priority == nil and 50 or value.priority
   result.init, result.opts, result.config = value.init, M.copy(value.opts), value.config
   result.opts_extend = M.copy(value.opts_extend)

@@ -91,7 +91,7 @@ function M.new(graph, paths, runtime, selected)
           if type(spec.config) == "function" then
             result = spec.config(copy(spec), opts)
           else
-            main = require(spec.main)
+            main = sources.require(spec.name)
             assert(type(main) == "table", "package entry module must return a table")
             local setup = main.setup
             assert(setup ~= nil, "package entry module must provide setup")
@@ -154,7 +154,9 @@ function M.new(graph, paths, runtime, selected)
   function self.states()
     local active, result = loaded(), {}
     for name, identity in pairs(names) do
-      result[name] = {loaded=active[identity.activation] == true, managed=active[identity.init] == true}
+      local state = sources.describe(graph.by_name[name], active[identity.activation] == true)
+      state.loaded, state.managed = active[identity.activation] == true, active[identity.init] == true
+      result[name] = state
     end
     return result
   end
@@ -189,8 +191,10 @@ function M.new(graph, paths, runtime, selected)
       package.loaded[names[name].init] = nil
       wraith.plugins.load(names[name].init, {}, {dependency=false})
     end
+    local commit = selected[name] and selected[name].commit
+    local binding = sources.prepare(spec, path, commit)
     for _, dependency in ipairs(spec.dependencies) do self.load(dependency) end
-    sources.reserve(spec, path, selected[name] and selected[name].commit)
+    sources.reserve(spec, path, commit, binding)
     wraith.runtimepath.append(path)
     wraith.plugins.call(names[name].init, "disarm")
     package.loaded[names[name].activation] = nil

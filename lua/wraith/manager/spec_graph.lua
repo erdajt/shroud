@@ -77,10 +77,10 @@ function M.normalize(input, descriptor)
     visiting[spec.name], visited[spec.name] = nil, true
     if not spec.enabled then return end
     assert(#ordered < 63, "enabled packages exceed 63")
-    if modules[spec.main] then
+    if spec.main and modules[spec.main] then
       error(fields.failure(modules[spec.main], origins[modules[spec.main]], "duplicate package main module: " .. spec.main), 0)
     end
-    modules[spec.main] = spec.name
+    if spec.main then modules[spec.main] = spec.name end
     for _, command in ipairs(spec.cmd) do
       if commands[command] then
         error(fields.failure(commands[command], origins[commands[command]], "duplicate command trigger: " .. command), 0)

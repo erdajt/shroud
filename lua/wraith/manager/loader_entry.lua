@@ -8,7 +8,7 @@ local function normalized(name)
 end
 
 -- select resolves setup metadata without exposing paths or executing an entrypoint.
-function M.select(spec, path, owned)
+function M.select(spec, path, owned, claim)
   assert(wraith.api_version >= 2 and wraith.capabilities.module_sources,
     "package entry selection requires host module sources; update wraith")
   local preloads = rawget(package, "preload")
@@ -16,6 +16,7 @@ function M.select(spec, path, owned)
   local entry
   if spec.main ~= nil then
     local name = fields.main(spec.main)
+    if claim then claim(name) end
     local preload = rawget(preloads, name)
     if owned then
       assert(owned.entry.name == name and preload == owned.wrapper,
@@ -41,6 +42,7 @@ function M.select(spec, path, owned)
     assert(entry, "package " .. spec.name .. " cannot infer main in " .. path
       .. " (candidates: " .. (#names == 0 and "none" or table.concat(names, ", ")) .. "); set main or config")
     fields.main(entry.name)
+    if claim then claim(entry.name) end
     local preload = rawget(preloads, entry.name)
     assert(owned or preload == nil, "package " .. spec.name .. " inferred main " .. entry.name
       .. " has a preload; set explicit main for an intentional override")
