@@ -2,7 +2,7 @@ local M = {}
 local fields = require("wraith.manager.spec_fields")
 
 -- normalized compares package and module names without host-specific suffixes.
-local function normalized(name)
+function M.normalized(name)
   return name:lower():gsub("^wraith%-", ""):gsub("%.wraith$", "")
     :gsub("%.lua$", ""):gsub("%-lua$", ""):gsub("[^a-z0-9]", "")
 end
@@ -37,7 +37,7 @@ function M.select(spec, path, owned, claim)
     local candidates = wraith.modules.catalog(path)
     local matches, names = {}, {}
     for _, candidate in ipairs(candidates) do
-      if normalized(candidate.name) == normalized(spec.name) then matches[#matches + 1] = candidate end
+      if M.normalized(candidate.name) == M.normalized(spec.name) then matches[#matches + 1] = candidate end
       if #names < 8 then names[#names + 1] = candidate.name end
     end
     if #matches == 1 then entry = matches[1]

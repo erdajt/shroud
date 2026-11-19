@@ -26,7 +26,7 @@ local function fold(record, fragment)
     record.remote, record.raw.url = source, source.url
   end
   if fragment.dir then record.raw.dir = fragment.dir end
-  for _, key in ipairs({"main", "enabled", "cond", "priority", "lazy", "dev", "init", "config", "branch", "tag", "commit", "pin"}) do
+  for _, key in ipairs({"main", "enabled", "cond", "priority", "lazy", "module", "dev", "init", "config", "branch", "tag", "commit", "pin"}) do
     if raw[key] ~= nil then record.raw[key] = raw[key] end
   end
 

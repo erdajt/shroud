@@ -2,7 +2,7 @@ local M = {}
 local sources = require("wraith.manager.spec_source")
 local specification = require("wraith.manager.spec")
 local allowed = {name=true, repo=true, url=true, dir=true, main=true, dependencies=true, enabled=true,
-  priority=true, lazy=true, cmd=true, event=true, keys=true, init=true, opts=true, config=true,
+  priority=true, lazy=true, module=true, cmd=true, event=true, keys=true, init=true, opts=true, config=true,
   branch=true, tag=true, commit=true, pin=true, opts_extend=true, optional=true, specs=true, cond=true, dev=true}
 
 function M.array(value, label, limit)
@@ -155,6 +155,7 @@ function M.declaration(value)
   assert(value.cond == nil or type(value.cond) == "boolean" or type(value.cond) == "function", "cond must be boolean or function")
   assert(value.priority == nil or type(value.priority) == "number" and value.priority % 1 == 0 and math.abs(value.priority) <= 1000000, "priority must be an integer within 1000000")
   assert(value.lazy == nil or type(value.lazy) == "boolean", "lazy must be boolean")
+  assert(value.module == nil or type(value.module) == "boolean", "module must be boolean")
   assert(value.dev == nil or type(value.dev) == "boolean", "dev must be boolean")
   assert(value.init == nil or type(value.init) == "function", "init must be a function")
   assert(value.config == nil or type(value.config) == "boolean" or type(value.config) == "function", "config must be boolean or function")
@@ -185,6 +186,7 @@ function M.normalize(value, descriptor, dependency, default_lazy, selection)
   result.init, result.opts, result.config = value.init, M.copy(value.opts), value.config
   result.opts_extend = M.copy(value.opts_extend)
   result.cmd, result.event, result.keys = commands, events, keys
+  result.module = value.module
   result.lazy = value.lazy
   if result.lazy == nil then result.lazy = dependency == true or default_lazy == true or #result.cmd + #result.event + #result.keys > 0 end
 
