@@ -1,7 +1,7 @@
 local failures = {missing={}, invalid={setup=42}, scalar="not a module"}
 local declarations, paths = {}, {}
 for _, name in ipairs({"missing","invalid","scalar"}) do
-  declarations[#declarations + 1] = {name=name,dir="/tmp/"..name,config=true,lazy=true}
+  declarations[#declarations + 1] = {name=name,main=name,dir="/tmp/"..name,config=true,lazy=true}
   paths[name] = "/tmp/"..name
   package.preload[name] = function() return failures[name] end
 end

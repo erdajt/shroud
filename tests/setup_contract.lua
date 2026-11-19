@@ -1,6 +1,6 @@
 local declarations, paths, calls = {}, {}, {}
-local function declare(name, config, opts)
-  declarations[#declarations + 1] = {name=name,dir="/tmp/"..name,lazy=true,config=config,opts=opts}
+local function declare(name, config, opts, main)
+  declarations[#declarations + 1] = {name=name,main=main,dir="/tmp/"..name,lazy=true,config=config,opts=opts}
   paths[name], calls[name] = "/tmp/"..name, {required=0,setup=0,cleanup=0,teardown=0}
   package.preload[name] = function()
     local count = calls[name]
@@ -21,14 +21,14 @@ declare("library")
 declarations[1].main = "library"
 declare("skipped",false)
 declarations[2].opts_extend = {"sources"}
-declare("configured",true)
-declare("options",nil,{})
-declare("false_options",false,{})
+declare("configured",true,nil,"configured")
+declare("options",nil,{},"options")
+declare("false_options",false,{},"false_options")
 local option_calls, custom_calls = 0, 0
 declare("function_options",false,function(_,opts)
   option_calls = option_calls + 1
   opts.value = "resolved"
-end)
+end,"function_options")
 declare("custom",function(_,opts)
   custom_calls = custom_calls + 1
   assert(next(opts)==nil)
@@ -39,7 +39,7 @@ declare("custom_options",function(_,opts)
   custom_calls = custom_calls + 1
   assert(opts.value=="custom")
 end,{value="custom"})
-declare("callable",true)
+declare("callable",true,nil,"callable")
 package.preload.callable = function()
   return {setup=setmetatable({}, {__call=function(_,opts)
     assert(type(opts)=="table")
