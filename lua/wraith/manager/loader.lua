@@ -85,15 +85,17 @@ function M.new(graph, paths, runtime, selected)
         end
         wraith.plugins.depend(identity.init)
         for _, dependency in ipairs(spec.dependencies) do wraith.plugins.depend(names[dependency].activation) end
-        local opts = options.resolve(spec, graph.options and graph.options[spec.name] or {{value=spec.opts}})
         local result
-        if type(spec.config) == "function" then
-          result = spec.config(copy(spec), opts)
-        else
-          main = require(spec.main)
-          if spec.config ~= false and type(main) == "table" and main.setup ~= nil then
-            assert(type(main.setup) == "function", "package setup must be a function")
-            result = main.setup(opts)
+        if spec.config or spec.opts ~= nil then
+          local opts = options.resolve(spec, graph.options and graph.options[spec.name] or {{value=spec.opts}})
+          if type(spec.config) == "function" then
+            result = spec.config(copy(spec), opts)
+          else
+            main = require(spec.main)
+            assert(type(main) == "table", "package entry module must return a table")
+            local setup = main.setup
+            assert(setup ~= nil, "package entry module must provide setup")
+            result = setup(opts)
           end
         end
         pending_cleanup = type(result) == "function" and result or nil

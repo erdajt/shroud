@@ -57,3 +57,15 @@ specs allow 256 fragments and 63 enabled plugins. option copying allows 4096 ent
 plugins declared only inside `dependencies` default to lazy loading. a separate top-level declaration makes that plugin eager unless it has triggers or an explicit `lazy = true`. `lazy = false` always requests startup loading. a completed import does not create another declaration, so repeating a dependency import at the top level does not change its loading default.
 
 `priority` defaults to `50`; explicit zero and negative values remain valid. eager plugins start in descending priority, with first declaration order breaking ties. each plugin loads its dependencies before its own configuration. a high-priority lazy plugin does not pull its dependencies ahead in the startup queue.
+
+## setup
+
+`opts = {}` or `config = true` requests `require(main).setup(opts)`. an options function runs at activation and can mutate or replace inherited options. the entry module must return a table with a callable `setup`; missing setup is an activation error.
+
+without `opts` or a truthy `config`, activation exposes the package path without requiring its main module. `main` and `opts_extend` alone do not request setup. libraries can be required by their dependents when needed.
+
+`config = false` skips configuration only when no options are declared. with `opts`, automatic setup still runs, matching lazy.nvim. this replaces the earlier behavior where false always suppressed setup.
+
+`config = function(plugin, opts) ... end` owns setup and any require calls. its returned cleanup function runs on unload; shroud does not infer a module teardown for that callback. automatic setup retains its returned cleanup and the module's `teardown`, each called once on unload or failed publication.
+
+unlike lazy.nvim's logged setup errors, failed shroud setup rejects activation and rolls back owned registrations. its original lazy trigger remains available for retry. require caches, runtime paths and arbitrary external effects remain outside that rollback.
