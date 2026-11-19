@@ -66,9 +66,14 @@ local function strings(value, label)
 end
 
 -- main validates an explicit or inferred entry module.
-local function main(value)
-  assert(type(value) == "string" and #value <= 128 and value:match("^[A-Za-z0-9_-]+[A-Za-z0-9_.-]*$") and not value:find("..", 1, true) and value:sub(-1) ~= ".", "invalid package main module")
-  assert(value ~= "wraith.manager" and value:sub(1, 15) ~= "wraith.manager.", "manager module namespace is reserved")
+function M.main(value)
+  assert(type(value) == "string" and #value > 0 and #value <= 128 and not value:find("..", 1, true)
+    and value:sub(1, 1) ~= "." and value:sub(-1) ~= ".", "invalid package main module")
+  for part in value:gmatch("[^.]+") do
+    assert(part:match("^[A-Za-z_][A-Za-z0-9_-]*$"), "invalid package main module")
+  end
+  assert(value ~= "shroud" and value:sub(1, 7) ~= "shroud."
+    and value ~= "wraith.manager" and value:sub(1, 15) ~= "wraith.manager.", "manager module namespace is reserved")
   return value
 end
 
@@ -136,7 +141,7 @@ function M.declaration(value)
   else
     assert(value.name ~= nil, "package override requires a name or source")
   end
-  if value.main ~= nil then main(value.main) end
+  if value.main ~= nil then M.main(value.main) end
   assert(value.enabled == nil or type(value.enabled) == "boolean" or type(value.enabled) == "function", "enabled must be boolean or function")
   assert(value.priority == nil or type(value.priority) == "number" and value.priority % 1 == 0 and math.abs(value.priority) <= 1000000, "priority must be an integer within 1000000")
   assert(value.lazy == nil or type(value.lazy) == "boolean", "lazy must be boolean")
@@ -156,7 +161,7 @@ function M.normalize(value, descriptor, dependency)
   value = M.declaration(value)
   local source, basename = sources.normalize(value)
   local result = descriptor({name=value.name == nil and basename:lower() or value.name, source=source, selector=revision(value), pin=value.pin})
-  result.main = main(value.main == nil and basename or value.main)
+  result.main = M.main(value.main == nil and basename or value.main)
   result.priority = value.priority == nil and 50 or value.priority
   result.init, result.opts, result.config = value.init, M.copy(value.opts), value.config
   result.opts_extend = M.copy(value.opts_extend)
