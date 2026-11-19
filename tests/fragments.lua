@@ -52,7 +52,7 @@ local function rejects(value, message)
   assert(not ok and tostring(err):find(message,1,true), tostring(err))
 end
 rejects({"owner/tool", "other/tool"}, "conflicting source")
-rejects({{name="tool",dir="/tmp/tool"},{name="tool",dir="/tmp/tool.git"}}, "conflicting source")
+assert(schema.normalize({{name="tool",dir="/tmp/tool"},{name="tool",dir="/tmp/tool.git"}}).by_name.tool.source.dir=="/tmp/tool.git")
 rejects({{name="tool",url="/tmp/tool"},{name="tool",url="/tmp/tool.git"}}, "conflicting source")
 rejects({{name="missing",opts={}}}, "source is missing")
 rejects({{"owner/tool",dependencies={"tool"}}}, "self dependency")

@@ -116,6 +116,13 @@ local function revision(value)
   return specification.selector(selected)
 end
 
+-- preflight validates combined selectors and triggers without copying dependency trees.
+function M.preflight(value)
+  local selected = revision(value)
+  local commands, events, keys = triggers(value, value.name or "package")
+  return selected, commands, events, keys
+end
+
 -- declaration validates a raw fragment without evaluating callbacks or traversing child declarations.
 function M.declaration(value)
   if type(value) == "string" then value = {repo=value} end
@@ -128,16 +135,17 @@ function M.declaration(value)
   if value.name ~= nil then specification.name(value.name) end
   assert(value.pin == nil or type(value.pin) == "boolean", "pin must be boolean")
   assert(value.optional == nil or type(value.optional) == "boolean", "optional must be boolean")
-  local selected = revision(value)
-  local repo = value.repo == nil and value[1] or value.repo
+  local selected = M.preflight(value)
+  local repo = value.repo
+  if repo == nil then repo = value[1] end
   if value.url ~= nil or value.dir ~= nil or repo ~= nil then
     assert(value[1] == nil or value.repo == nil, "choose one repository field")
     if value.url == nil and value.dir == nil and type(repo) == "string" and not repo:find("[/:]") and repo ~= "~" then
       specification.name(repo)
       assert(value.name == nil or value.name == repo, "name-only declaration cannot rename a package")
     else
-      local source = specification.source(sources.normalize(value))
-      assert(source.kind ~= "local" or selected.kind == "head" and not value.pin, "local packages cannot select or pin git revisions")
+      local source, _, declared = sources.normalize(value)
+      assert(declared.remote or source.kind ~= "local" or selected.kind == "head" and not value.pin, "local packages cannot select or pin git revisions")
     end
   else
     assert(value.name ~= nil, "package override requires a name or source")
@@ -152,7 +160,6 @@ function M.declaration(value)
   assert(value.dependencies == nil or type(value.dependencies) == "table" or type(value.dependencies) == "string", "dependencies must be declarations or a package name")
   assert(value.specs == nil or type(value.specs) == "table" or type(value.specs) == "string", "specs must be declarations")
   require("wraith.manager.spec_options").capture({{value=value.opts, extend=value.opts_extend}})
-  triggers(value, value.name or "package")
 
   detached = M.copy(detached)
   detached.dependencies, detached.specs = value.dependencies, value.specs
@@ -162,13 +169,18 @@ end
 -- normalize resolves one validated merged declaration and evaluates enabled once.
 function M.normalize(value, descriptor, dependency, default_lazy)
   value = M.declaration(value)
-  local source, basename = sources.normalize(value)
-  local result = descriptor({name=value.name == nil and basename:lower() or value.name, source=source, selector=revision(value), pin=value.pin})
+  local source, basename, declared = sources.normalize(value)
+  local selected, commands, events, keys = M.preflight(value)
+  local local_override = declared.remote and source.kind == "local"
+  local result = descriptor({name=value.name == nil and basename:lower() or value.name, source=source,
+    selector=local_override and {kind="head"} or selected, pin=not local_override and value.pin or false})
+  result.declared_source = M.copy(declared.remote or source)
+  result.declared_selector, result.declared_pin = M.copy(selected), value.pin == true
   result.main = value.main ~= nil and M.main(value.main) or nil
   result.priority = value.priority == nil and 50 or value.priority
   result.init, result.opts, result.config = value.init, M.copy(value.opts), value.config
   result.opts_extend = M.copy(value.opts_extend)
-  result.cmd, result.event, result.keys = triggers(value, result.name)
+  result.cmd, result.event, result.keys = commands, events, keys
   result.lazy = value.lazy
   if result.lazy == nil then result.lazy = dependency == true or default_lazy == true or #result.cmd + #result.event + #result.keys > 0 end
 

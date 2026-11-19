@@ -32,11 +32,11 @@ fragments follow declaration order, including imports and nested dependencies. t
 | `dependencies` | names combine in first-seen order; nested declarations also merge |
 | `cmd`, `event` | triggers combine in first-seen order |
 | `keys` | later action replaces the same normalized key and mode |
-| `init`, `config`, `enabled`, `cond`, `lazy`, `priority`, `main`, `pin` | last supplied value wins |
+| `init`, `config`, `enabled`, `cond`, `lazy`, `priority`, `main`, `pin`, `dir` | last supplied value wins |
 
 `opts_extend` takes effect from its declaration onward. it does not change earlier merges. an empty list resets extension paths. when both inherited and new targets are tables, both must be lists; otherwise the value follows normal merge rules. duplicate key aliases inside one fragment remain an error; overrides belong in separate fragments.
 
-choose one revision selector across the merged plugin: `branch`, `tag` or `commit`. selectors are validated before merging; they do not silently override a selector of another kind. this stricter rule differs from lazy.nvim's selector precedence.
+choose one revision selector across the merged plugin: `branch`, `tag` or `commit`. selectors are validated before merging; they do not silently override a selector of another kind. this stricter rule differs from lazy.nvim's selector precedence. [local overrides](sources.md) preserve remote selector intent while using the local directory without git operations.
 
 ## scoped and optional declarations
 
@@ -50,7 +50,7 @@ choose one revision selector across the merged plugin: `branch`, `tag` or `commi
 
 `optional = true` keeps a contribution only when a surviving nonoptional declaration names that plugin. a full dependency declaration or name-only override qualifies; a bare dependency reference does not. optional-only declarations may omit sources. surviving declarations must resolve a source, and cannot borrow one from a removed scope.
 
-collection precedes pruning, including trusted import execution. malformed declarations and conflicting sources fail before pruning. final dependency and trigger checks use survivors. references to known excluded packages disappear; unknown dependencies still fail. scoped self-overrides are allowed.
+collection precedes pruning, including trusted import execution. malformed declarations and conflicting remote sources fail before pruning. merged selectors and trigger counts are validated before evaluating gates for that revision. final dependency and trigger ownership checks use survivors. references to known excluded packages disappear; unknown dependencies still fail. scoped self-overrides are allowed.
 
 excluded packages do not run init or setup, register triggers or install missing sources. explicit load, unload and install requests report the exclusion reason. change the configuration and reload to activate them. status distinguishes `disabled`, `conditional`, `optional` and `scope`; an existing explicitly disabled nonoptional package pin is labeled `retained pin`, without claiming an installed checkout. optional-only and scope-removed entries are pruned from the lock on install/update unless a false condition protects them. files are retained; object garbage collection is not implemented.
 

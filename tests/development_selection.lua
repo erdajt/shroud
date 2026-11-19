@@ -72,4 +72,4 @@ wraith.fs.stat=function() error("permission denied") end
 ok, err=pcall(development.select,record,development.settings({path=base,fallback=true}))
 wraith.fs.stat=stat
 assert(not ok and tostring(err):find("permission denied",1,true))
-assert(not pcall(sources.normalize,{"owner/tool",dir=base}))
+assert(not pcall(sources.normalize,{"./tool",dir=base}))

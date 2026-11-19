@@ -7,7 +7,6 @@ local M = {}
 
 -- source_key compares remote suffix variants without rewriting the first selected transport.
 local function source_key(source)
-  if source.kind == "local" then return "local:" .. source.dir end
   local url = source.url
   if url:sub(1, 1) ~= "/" and url:sub(1, 5) ~= "file:" then
     url = url:gsub("/+$", ""):gsub("%.git$", "")
@@ -17,15 +16,15 @@ end
 
 -- fold rebuilds a package from one surviving contribution without evaluating callbacks.
 local function fold(record, fragment)
-  local raw, source = fragment.value, fragment.source
+  local raw, source = fragment.value, fragment.remote
   record.dependency_only = record.dependency_only and fragment.dependency
   record.top_only = record.top_only and fragment.parent == nil
   record.optional = record.optional and raw.optional == true
   record.origins[#record.origins + 1] = fields.copy(fragment.origin)
-  if source and not record.source then
-    record.source = source
-    if source.kind == "local" then record.raw.dir = source.dir else record.raw.url = source.url end
+  if source and not record.remote then
+    record.remote, record.raw.url = source, source.url
   end
+  if fragment.dir then record.raw.dir = fragment.dir end
   for _, key in ipairs({"main", "enabled", "cond", "priority", "lazy", "init", "config", "branch", "tag", "commit", "pin"}) do
     if raw[key] ~= nil then record.raw[key] = raw[key] end
   end
@@ -72,15 +71,16 @@ function M.new(descriptor)
 
   function self.add(value, origin, dependency, parent)
     local raw = fields.declaration(value)
-    local repo = raw.repo or raw[1]
+    local repo = raw.repo
+    if repo == nil then repo = raw[1] end
     local explicit = raw.url ~= nil or raw.dir ~= nil or type(repo) == "string" and (repo:find("[/:]") or repo == "~")
-    local source, name
+    local declared, name
     if explicit then
-      local basename
-      source, basename = sources.normalize(raw)
-      name = schema.name(raw.name == nil and basename:lower() or raw.name)
-      source = schema.source(source)
-      assert(not selected[name] or source_key(selected[name]) == source_key(source), "conflicting source for package " .. name)
+      declared = sources.declaration(raw)
+      name = schema.name(raw.name == nil and declared.basename:lower() or raw.name)
+      if declared.remote then
+        assert(not selected[name] or source_key(selected[name]) == source_key(declared.remote), "conflicting source for package " .. name)
+      end
     else
       name = schema.name(raw.name or repo)
       assert(not repo or repo == name, "name-only declaration cannot rename a package")
@@ -89,8 +89,8 @@ function M.new(descriptor)
     local dependencies, scoped = raw.dependencies, raw.specs
     raw.dependencies, raw.specs = nil, nil
     local fragment = forest.add(name, raw, origin, parent, dependency)
-    fragment.source = source
-    if source and not selected[name] then selected[name] = source end
+    fragment.remote, fragment.dir = declared and declared.remote, declared and declared.dir
+    if fragment.remote and not selected[name] then selected[name] = fragment.remote end
     return fragment, dependencies, scoped
   end
 
@@ -105,6 +105,10 @@ function M.new(descriptor)
         for _, fragment in ipairs(live) do fold(record, fragment) end
         record.raw.dependencies = fields.copy(record.dependencies)
         record.raw.optional = record.optional
+        record.source = record.remote or record.raw.dir and {kind="local", dir=record.raw.dir}
+        record.selector = fields.preflight(record.raw)
+        assert(not record.source or record.source.kind ~= "local" or record.selector.kind == "head" and not record.raw.pin,
+          "local packages cannot select or pin git revisions")
         record.layers = options.capture(record.layers)
       end)
       if not ok then error(fields.failure(name, record.origins, failure), 0) end

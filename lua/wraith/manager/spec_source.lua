@@ -19,30 +19,46 @@ function M.local_path(location)
   return require("wraith.manager.spec").source({kind="local", dir=location}).dir
 end
 
--- normalize resolves repository declarations without inspecting the working directory.
-function M.normalize(value)
+-- declaration separates a remote identity from its explicit local override.
+function M.declaration(value)
   assert(value[1] == nil or value.repo == nil, "choose one repository field")
   local repo = value.repo
   if repo == nil then repo = value[1] end
-  local count = (repo ~= nil and 1 or 0) + (value.url ~= nil and 1 or 0) + (value.dir ~= nil and 1 or 0)
-  assert(count == 1, "choose exactly one repo, url or dir")
-  local location = value.dir or value.url or repo
-  assert(type(location) == "string" and #location > 0, "package source must be a nonempty string")
-  local path = location:sub(1, 1) == "/" or location == "~" or location:sub(1, 2) == "~/"
-    or location:sub(1, 2) == "./" or location:sub(1, 3) == "../"
-  local source
-
-  if value.dir ~= nil or repo ~= nil and path then
-    location = M.local_path(location)
-    source = {kind="local", dir=location}
-  elseif repo ~= nil and location:match("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$") then
-    source = {kind="git", url="https://github.com/" .. location .. (location:sub(-4) == ".git" and "" or ".git")}
-  else
-    source = {kind="git", url=location}
+  assert(repo == nil or value.url == nil, "choose one repo or url")
+  local location = value.url
+  if location == nil then location = repo end
+  assert(location ~= nil or value.dir ~= nil, "choose a repo, url or dir")
+  local result = {}
+  if location ~= nil then
+    assert(type(location) == "string" and #location > 0, "package source must be a nonempty string")
+    local path = location:sub(1, 1) == "/" or location == "~" or location:sub(1, 2) == "~/"
+      or location:sub(1, 2) == "./" or location:sub(1, 3) == "../"
+    if repo ~= nil and path then
+      assert(value.dir == nil, "local repository path cannot also specify dir")
+      result.dir = M.local_path(location)
+      location = result.dir
+    elseif repo ~= nil and value.dir ~= nil and not location:find("[/:]") then
+      require("wraith.manager.spec").name(location)
+    else
+      local url = location
+      if repo ~= nil and location:match("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$") then
+        url = "https://github.com/" .. location .. (location:sub(-4) == ".git" and "" or ".git")
+      end
+      result.remote = require("wraith.manager.spec").source({kind="git", url=url})
+    end
   end
-
+  if value.dir ~= nil then result.dir = M.local_path(value.dir) end
+  location = location or result.dir
   local basename = location:gsub("/+$", ""):match("([^/:]+)$") or ""
-  return source, basename:gsub("%.git$", "")
+  result.basename = basename:gsub("%.git$", "")
+  return result
+end
+
+-- normalize returns the effective source while retaining declared remote metadata.
+function M.normalize(value)
+  local declared = M.declaration(value)
+  local source = declared.dir and {kind="local", dir=declared.dir} or declared.remote
+  return source, declared.basename, declared
 end
 
 return M

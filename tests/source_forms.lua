@@ -46,7 +46,7 @@ for _, source in ipairs({
   assert(not pcall(spec.normalize, {source}), source)
 end
 for _, declaration in ipairs({
-  {"owner/tool", repo="owner/other"}, {"owner/tool", dir="./tool"},
+  {"owner/tool", repo="owner/other"}, {"./tool", dir="./other"},
   {"owner/tool", url="https://example.com/tool"}, {dir="~another/tool"},
   {dir=""}, {url=false},
 }) do
