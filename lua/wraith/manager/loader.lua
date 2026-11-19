@@ -1,5 +1,6 @@
 local copy = require("wraith.manager.spec_fields").copy
 local sources = require("wraith.manager.loader_sources")
+local options = require("wraith.manager.spec_options")
 local M = {}
 local wrappers = {}
 
@@ -84,12 +85,7 @@ function M.new(graph, paths, runtime, selected)
         end
         wraith.plugins.depend(identity.init)
         for _, dependency in ipairs(spec.dependencies) do wraith.plugins.depend(names[dependency].activation) end
-        local opts = type(spec.opts) == "table" and copy(spec.opts) or {}
-        if type(spec.opts) == "function" then
-          local returned = spec.opts(copy(spec), opts)
-          if returned ~= nil then opts = returned end
-        end
-        assert(type(opts) == "table", "package opts must produce a table")
+        local opts = options.resolve(spec, {{value=spec.opts}})
         local result
         if type(spec.config) == "function" then
           result = spec.config(copy(spec), opts)
