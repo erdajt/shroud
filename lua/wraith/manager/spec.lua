@@ -7,7 +7,8 @@ local function fields(value, allowed, label)
   end
 end
 
-local function name(value)
+-- name validates a package identity before graph resolution.
+function M.name(value)
   assert(type(value) == "string" and #value <= 64 and value:match("^[a-z0-9][a-z0-9._-]*$"), "invalid package name")
   return value
 end
@@ -17,7 +18,8 @@ local function text(value, label)
   return value
 end
 
-local function source(value)
+-- source validates a normalized repository or local directory.
+function M.source(value)
   fields(value, {kind=true, url=true, dir=true}, "source")
   if value.kind == "local" then
     assert(value.url == nil, "local source cannot contain a url")
@@ -55,7 +57,8 @@ local function source(value)
   return {kind="git", url=url}
 end
 
-local function selector(value)
+-- selector validates one revision declaration without resolving it.
+function M.selector(value)
   fields(value, {kind=true, value=true}, "selector")
   local kind = value.kind
   if kind == "head" then
@@ -80,7 +83,7 @@ end
 function M.descriptor(value)
   fields(value, {name=true, source=true, selector=true, pin=true, dependencies=true}, "package descriptor")
   assert(value.pin == nil or type(value.pin) == "boolean", "pin must be boolean")
-  local result = {name=name(value.name), source=source(value.source), selector=selector(value.selector == nil and {kind="head"} or value.selector), pin=value.pin or false, dependencies={}}
+  local result = {name=M.name(value.name), source=M.source(value.source), selector=M.selector(value.selector == nil and {kind="head"} or value.selector), pin=value.pin or false, dependencies={}}
   if result.source.kind == "local" then
     assert(result.selector.kind == "head" and not result.pin, "local packages cannot select or pin git revisions")
   end
@@ -93,7 +96,7 @@ function M.descriptor(value)
   end
   assert(count == #dependencies and count <= 63, "dependencies exceed the package limit")
   for _, dependency in ipairs(dependencies) do
-    dependency = name(dependency)
+    dependency = M.name(dependency)
     assert(not seen[dependency] and dependency ~= result.name, "duplicate or self dependency: " .. dependency)
     seen[dependency] = true
     result.dependencies[#result.dependencies + 1] = dependency
