@@ -19,7 +19,7 @@ function M.new(descriptor)
   local records, ordered, count = {}, {}, 0
   local self = {}
 
-  function self.add(value, origin)
+  function self.add(value, origin, dependency)
     local raw = fields.declaration(value)
     count = count + 1
     assert(count <= 256, "package declarations exceed 256")
@@ -38,9 +38,10 @@ function M.new(descriptor)
 
     local record = records[name]
     if not record then
-      record = {name=name, raw={name=name}, dependencies={}, dependency_set={}, layers={}, extend={}, lists={}, keys={}, origins={}}
+      record = {name=name, raw={name=name}, dependencies={}, dependency_set={}, layers={}, extend={}, lists={}, keys={}, origins={}, dependency_only=true}
       records[name], ordered[#ordered + 1] = record, record
     end
+    record.dependency_only = record.dependency_only and dependency == true
     local location = fields.copy(origin or {kind="declaration"})
     location.index = count
     record.origins[#record.origins + 1] = location
@@ -92,7 +93,7 @@ function M.new(descriptor)
       local ok, spec = pcall(function()
         assert(record.source, "package source is missing: " .. record.name)
         record.raw.dependencies = fields.copy(record.dependencies)
-        local value = fields.normalize(record.raw, descriptor)
+        local value = fields.normalize(record.raw, descriptor, record.dependency_only)
         value.dependencies, value.order = fields.copy(record.dependencies), index
         return value
       end)

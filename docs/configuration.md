@@ -51,3 +51,9 @@ callbacks receive the final plugin spec and options inherited so far. returning 
 option callbacks run when the plugin activates. `enabled` runs once per merged plugin during normalization. `init` and `config` retain their lifecycle timing. invalid declarations, cycles and structural limits fail before initialization. option failures during activation roll back owned registrations; a later load can retry.
 
 specs allow 256 fragments and 63 enabled plugins. option copying allows 4096 entries and depth 16, including inherited recipes and callback results. these are structural limits, not byte limits for strings.
+
+## startup order
+
+plugins declared only inside `dependencies` default to lazy loading. a separate top-level declaration makes that plugin eager unless it has triggers or an explicit `lazy = true`. `lazy = false` always requests startup loading. a completed import does not create another declaration, so repeating a dependency import at the top level does not change its loading default.
+
+`priority` defaults to `50`; explicit zero and negative values remain valid. eager plugins start in descending priority, with first declaration order breaking ties. each plugin loads its dependencies before its own configuration. a high-priority lazy plugin does not pull its dependencies ahead in the startup queue.

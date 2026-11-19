@@ -66,12 +66,11 @@ function M.configure(graph, options)
   end
   wraith.commands.create("packages.cancel", function() M.cancel() end, "cancel package operation")
   local function eager(index)
-    while graph.ordered[index] and graph.ordered[index].lazy do index = index + 1 end
-    local spec = graph.ordered[index]
-    if not spec then return end
+    local name = graph.start[index]
+    if not name then return end
     wraith.schedule(function()
-      local ok, err = pcall(wraith.plugins.call, runtime, "load", spec.name)
-      if not ok then wraith.notify("package " .. spec.name .. ": " .. tostring(err)) end
+      local ok, err = pcall(wraith.plugins.call, runtime, "load", name)
+      if not ok then wraith.notify("package " .. name .. ": " .. tostring(err)) end
       eager(index + 1)
     end)
   end

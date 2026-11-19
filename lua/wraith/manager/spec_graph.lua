@@ -8,8 +8,8 @@ function M.normalize(input, descriptor)
   local imports, tables = importer.new(), {}
   local count = 0
   local walk
-  local function add(value, depth, origin)
-    local spec, dependencies = collection.add(value, origin)
+  local function add(value, depth, origin, reference)
+    local spec, dependencies = collection.add(value, origin, reference)
     if dependencies ~= nil then
       walk(dependencies, depth + 1, true, function(dependency)
         assert(dependency ~= spec.name, "self dependency: " .. dependency)
@@ -27,7 +27,7 @@ function M.normalize(input, descriptor)
     assert(depth <= 16 and count <= 1024, "package declarations exceed nesting or entry limits")
     if type(value) == "string" then
       local name = value
-      if not reference or value:find("[/:]") or value == "~" then name = add(value, depth, origin) end
+      if not reference or value:find("[/:]") or value == "~" then name = add(value, depth, origin, reference) end
       if emit then emit(name) end
       return
     end
@@ -40,13 +40,13 @@ function M.normalize(input, descriptor)
       if value[1] ~= nil or value.repo ~= nil or value.url ~= nil or value.dir ~= nil then
         local fragment = {}
         for key, child in pairs(value) do if key ~= "import" and key ~= "cond" then fragment[key] = child end end
-        local name = add(fragment, depth, origin)
+        local name = add(fragment, depth, origin, reference)
         if emit then emit(name) end
         declaration = {import=value.import, name=value.name, enabled=value.enabled, cond=value.cond}
       end
       imports.load(declaration, depth, reference, emit, walk)
     elseif keyed or type(value[1]) == "string" and #value == 1 and (not reference or value[1]:find("[/:]") or value[1] == "~") then
-      local name = add(value, depth, origin)
+      local name = add(value, depth, origin, reference)
       if emit then emit(name) end
     else
       for _, child in ipairs(fields.array(value, "package specs", 256)) do walk(child, depth + 1, reference, emit, origin) end
@@ -101,7 +101,11 @@ function M.normalize(input, descriptor)
     if not ok then error(fields.failure(spec.name, origins[spec.name], failure), 0) end
   end
   for _, spec in ipairs(declared) do visit(spec) end
-  return {ordered=ordered, by_name=by_name, options=recipes, origins=origins}
+  local start = {}
+  for _, spec in ipairs(declared) do
+    if spec.enabled and not spec.lazy then start[#start + 1] = spec.name end
+  end
+  return {ordered=ordered, by_name=by_name, options=recipes, origins=origins, start=start}
 end
 
 return M
