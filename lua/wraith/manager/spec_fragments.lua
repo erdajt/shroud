@@ -20,6 +20,7 @@ local function fold(record, fragment)
   local raw, source = fragment.value, fragment.source
   record.dependency_only = record.dependency_only and fragment.dependency
   record.top_only = record.top_only and fragment.parent == nil
+  record.optional = record.optional and raw.optional == true
   record.origins[#record.origins + 1] = fields.copy(fragment.origin)
   if source and not record.source then
     record.source = source
@@ -85,12 +86,12 @@ function M.new(descriptor)
       assert(not repo or repo == name, "name-only declaration cannot rename a package")
     end
 
-    local dependencies = raw.dependencies
-    raw.dependencies = nil
+    local dependencies, scoped = raw.dependencies, raw.specs
+    raw.dependencies, raw.specs = nil, nil
     local fragment = forest.add(name, raw, origin, parent, dependency)
     fragment.source = source
     if source and not selected[name] then selected[name] = source end
-    return fragment, dependencies
+    return fragment, dependencies, scoped
   end
 
   function self.merged(name)
@@ -99,10 +100,11 @@ function M.new(descriptor)
     if previous and previous.revision == revision then return previous.record, revision end
     local record
     if #live > 0 then
-      record = {name=name, raw={name=name}, dependencies={}, dependency_set={}, layers={}, extend={}, lists={}, keys={}, origins={}, dependency_only=true, top_only=true}
+      record = {name=name, raw={name=name}, dependencies={}, dependency_set={}, layers={}, extend={}, lists={}, keys={}, origins={}, dependency_only=true, top_only=true, optional=true}
       local ok, failure = pcall(function()
         for _, fragment in ipairs(live) do fold(record, fragment) end
         record.raw.dependencies = fields.copy(record.dependencies)
+        record.raw.optional = record.optional
         record.layers = options.capture(record.layers)
       end)
       if not ok then error(fields.failure(name, record.origins, failure), 0) end
@@ -111,7 +113,7 @@ function M.new(descriptor)
     return record, revision
   end
 
-  function self.finish()
+  function self.finish(resolution)
     local by_name, declared, recipes, origins = {}, {}, {}, {}
     for _, name in ipairs(forest.order) do self.merged(name) end
     for index, name in ipairs(forest.order) do
@@ -119,8 +121,17 @@ function M.new(descriptor)
       if record then
         local ok, spec = pcall(function()
           assert(record.source, "package source is missing: " .. name)
-          local value = fields.normalize(record.raw, descriptor, record.dependency_only)
-          value.dependencies, value.order = fields.copy(record.dependencies), index
+          local raw, dependencies = record.raw, record.dependencies
+          if resolution then
+            raw = {}
+            for key, value in pairs(record.raw) do raw[key] = value end
+            raw.enabled = resolution.enabled[name]
+            assert(type(raw.enabled) == "boolean", "missing resolved package gate: " .. name)
+            dependencies = assert(resolution.dependencies[name], "missing resolved dependencies: " .. name)
+            raw.dependencies = dependencies
+          end
+          local value = fields.normalize(raw, descriptor, record.dependency_only)
+          value.dependencies, value.order = fields.copy(dependencies), index
           return value
         end)
         if not ok then error(fields.failure(name, record.origins, spec), 0) end

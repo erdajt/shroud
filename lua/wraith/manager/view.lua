@@ -140,6 +140,10 @@ function M.new(manager, options)
         if not item then wraith.notify("select a package row"); return end
         if operation == "inspect" then
           local lines = { text(item.name, 128), "source: " .. source(item), "path: " .. text(item.path, 1024), "state: " .. text(item.state, 128), "installed commit: " .. text(item.commit, 64), "loaded commit: " .. text(item.loaded_commit, 64), "loaded: " .. tostring(item.loaded == true), "pinned: " .. tostring(item.pin == true) }
+          if item.exclusion then
+            lines = {text(item.name, 128), "excluded: " .. text(item.exclusion, 128), "change its configuration and reload to activate"}
+            if item.retained_commit then lines[#lines + 1] = "retained pin: " .. text(item.retained_commit, 64) end
+          end
           if item.error then lines[#lines + 1] = "error: " .. text(item.error, 4096) end
           if item.restart_required then lines[#lines + 1] = "reload required" end
           details("package details", lines)
@@ -176,12 +180,15 @@ function M.new(manager, options)
     for _, item in ipairs(rows) do
       local state = item.loaded and "loaded" or item.state or (item.installed and "installed" or "missing")
       if type(item.source) == "table" and item.source.kind == "local" then state = state .. " · local" end
+      if item.exclusion then state = state .. " · " .. text(item.exclusion, 128) end
+      if item.retained_commit then state = state .. " · retained pin " .. text(item.retained_commit, 8) end
       if item.pin then state = state .. " · pinned" end
       if item.commit then state = state .. " · installed " .. text(item.commit, 8) end
       if item.loaded_commit then state = state .. " · loaded " .. text(item.loaded_commit, 8) end
       if item.restart_required then state = state .. " · reload required" end
       if item.error then state = state .. " · " .. text(item.error, 240) end
-      lines[#lines + 1] = text(item.name, 128) .. " · " .. state .. " · " .. source(item)
+      local origin = source(item)
+      lines[#lines + 1] = text(item.name, 128) .. " · " .. state .. (origin ~= "" and " · " .. origin or "")
     end
     if #rows == 0 then lines[#lines + 1] = "no packages configured" end
     if operation and operation.name then lines[#lines + 1] = "active package: " .. text(operation.name, 128) end

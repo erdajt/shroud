@@ -23,7 +23,7 @@ both declarations select one plugin. its options contain both window dimensions 
 
 ## merge order
 
-fragments follow declaration order, including imports and nested dependencies. the first fragment establishes ordering. later scalar fields replace earlier fields, including `false`. omitted fields preserve earlier values. the first resolved source stays selected; changing it under the same name is an error. remote URLs with or without a trailing `.git` match, but different transports and local directories remain distinct.
+fragments follow declaration order, including imports and nested dependencies. the first fragment establishes ordering. later scalar fields replace earlier fields, including `false`. omitted fields preserve earlier values. the first surviving resolved source stays selected; changing it under the same name is an error. remote URLs with or without a trailing `.git` match, but different transports and local directories remain distinct.
 
 | field | repeated declarations |
 | --- | --- |
@@ -38,6 +38,22 @@ fragments follow declaration order, including imports and nested dependencies. t
 
 choose one revision selector across the merged plugin: `branch`, `tag` or `commit`. selectors are validated before merging; they do not silently override a selector of another kind. this stricter rule differs from lazy.nvim's selector precedence.
 
+## scoped and optional declarations
+
+```lua
+{ "owner/workspace.wraith", enabled = false, specs = {
+  { "owner/history.wraith", optional = true, opts = { limit = 200 } },
+} }
+```
+
+`specs` owns nested declarations without creating dependency edges or dependency-only loading defaults. removing a parent removes its contributions to those children. independently declared children survive with only their remaining settings. cached imports keep their original scope; replay cannot rescue removed declarations. use `dependencies` for activation ordering.
+
+`optional = true` keeps a contribution only when a surviving nonoptional declaration names that plugin. a full dependency declaration or name-only override qualifies; a bare dependency reference does not. optional-only declarations may omit sources. surviving declarations must resolve a source, and cannot borrow one from a removed scope.
+
+collection precedes pruning, including trusted import execution. malformed declarations and conflicting sources fail before pruning. final dependency and trigger checks use survivors. references to known excluded packages disappear; unknown dependencies still fail. scoped self-overrides are allowed.
+
+excluded packages do not run init or setup, register triggers or install missing sources. explicit load, unload and install requests report the exclusion reason. change the configuration and reload to activate them. status distinguishes `disabled`, `optional` and `scope`; an existing explicitly disabled nonoptional package pin is labeled `retained pin`, without claiming an installed checkout. optional-only and scope-removed entries are pruned from the lock on install/update. files are retained; object garbage collection is not implemented.
+
 ## option callbacks
 
 ```lua
@@ -48,7 +64,7 @@ end }
 
 callbacks receive the final plugin spec and options inherited so far. returning `nil` retains mutations; returning a table replaces the options. `wraith.json.null` in a table declaration removes a map value. an empty map preserves inherited map fields, while an empty table replaces an inherited list. options and callback arguments are detached from the input declarations.
 
-option callbacks run when the plugin activates. `enabled` runs once per merged plugin during normalization. `init` and `config` retain their lifecycle timing. invalid declarations, cycles and structural limits fail before initialization. option failures during activation roll back owned registrations; a later load can retry.
+option callbacks run when the plugin activates. `enabled` runs once per effective contribution and dependency revision during normalization. removing a scope may change that revision; unchanged predicates are not repeated. callbacks receive detached merged fields and effective dependency names, without recursive `specs`. normalization allows at most 1,024 predicate calls. `init` and `config` retain their lifecycle timing. invalid declarations, cycles and structural limits fail before initialization. option failures during activation roll back owned registrations; a later load can retry.
 
 specs allow 256 fragments and 63 enabled plugins. option copying allows 4096 entries and depth 16, including inherited recipes and callback results. these are structural limits, not byte limits for strings.
 

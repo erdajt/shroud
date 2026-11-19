@@ -3,7 +3,7 @@ local sources = require("wraith.manager.spec_source")
 local specification = require("wraith.manager.spec")
 local allowed = {name=true, repo=true, url=true, dir=true, main=true, dependencies=true, enabled=true,
   priority=true, lazy=true, cmd=true, event=true, keys=true, init=true, opts=true, config=true,
-  branch=true, tag=true, commit=true, pin=true, opts_extend=true}
+  branch=true, tag=true, commit=true, pin=true, opts_extend=true, optional=true, specs=true}
 
 function M.array(value, label, limit)
   assert(type(value) == "table", label .. " must be an array")
@@ -116,17 +116,18 @@ local function revision(value)
   return specification.selector(selected)
 end
 
--- declaration validates a raw fragment without evaluating callbacks or traversing dependencies.
+-- declaration validates a raw fragment without evaluating callbacks or traversing child declarations.
 function M.declaration(value)
   if type(value) == "string" then value = {repo=value} end
   assert(type(value) == "table", "package spec must be a table or repository")
   local detached = {}
   for key, child in pairs(value) do
     assert(key == 1 or allowed[key], "unknown package field: " .. tostring(key))
-    if key ~= "dependencies" then detached[key] = child end
+    if key ~= "dependencies" and key ~= "specs" then detached[key] = child end
   end
   if value.name ~= nil then specification.name(value.name) end
   assert(value.pin == nil or type(value.pin) == "boolean", "pin must be boolean")
+  assert(value.optional == nil or type(value.optional) == "boolean", "optional must be boolean")
   local selected = revision(value)
   local repo = value.repo == nil and value[1] or value.repo
   if value.url ~= nil or value.dir ~= nil or repo ~= nil then
@@ -148,11 +149,12 @@ function M.declaration(value)
   assert(value.init == nil or type(value.init) == "function", "init must be a function")
   assert(value.config == nil or type(value.config) == "boolean" or type(value.config) == "function", "config must be boolean or function")
   assert(value.dependencies == nil or type(value.dependencies) == "table" or type(value.dependencies) == "string", "dependencies must be declarations or a package name")
+  assert(value.specs == nil or type(value.specs) == "table" or type(value.specs) == "string", "specs must be declarations")
   require("wraith.manager.spec_options").capture({{value=value.opts, extend=value.opts_extend}})
   triggers(value, value.name or "package")
 
   detached = M.copy(detached)
-  detached.dependencies = value.dependencies
+  detached.dependencies, detached.specs = value.dependencies, value.specs
   return detached
 end
 

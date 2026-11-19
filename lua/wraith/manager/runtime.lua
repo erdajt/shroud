@@ -1,6 +1,13 @@
-local copy = require("wraith.manager.spec_fields").copy
+local fields = require("wraith.manager.spec_fields")
+local copy = fields.copy
 local M, state = {}, nil
 local runtime = "wraith.manager.runtime"
+
+local function require_active(name)
+  local excluded = state.graph.excluded and state.graph.excluded[name]
+  assert(not excluded, "package " .. tostring(name) .. " is excluded (" ..
+    (excluded and excluded.reason or "") .. "); change its configuration and reload")
+end
 
 local function fresh_listeners(event, before)
   local seen, result = {}, {}
@@ -21,7 +28,7 @@ function M.configure(graph, options)
   for _, spec in ipairs(graph.ordered) do
     descriptors[#descriptors + 1] = require("wraith.manager.spec").descriptor({name=spec.name, source=spec.source, selector=spec.selector, pin=spec.pin, dependencies=spec.dependencies})
   end
-  local store = require("wraith.manager.store").new(descriptors, options.storage)
+  local store = require("wraith.manager.store").new(descriptors, options.storage, graph.retain_lock)
   local rows, paths, selected = store.inspect(), {}, {}
   for _, row in ipairs(rows) do
     paths[row.name], selected[row.name] = row.path, copy(row)
@@ -79,7 +86,8 @@ end
 
 function M.status()
   assert(state, "package manager is not configured")
-  local rows, states = state.store.inspect(), state.loader.states()
+  local rows, lock = state.store.inspect()
+  local states = state.loader.states()
   for _, row in ipairs(rows) do
     local chosen = state.selected[row.name]
     row.loaded, row.managed = states[row.name].loaded, states[row.name].managed
@@ -92,11 +100,22 @@ function M.status()
     row.restart_required = not chosen or row.path ~= chosen.path or row.commit ~= chosen.commit
     if not row.managed then row.state = "unloaded" end
   end
+  local excluded = {}
+  for name in pairs(state.graph.excluded or {}) do excluded[#excluded + 1] = name end
+  table.sort(excluded)
+  for _, name in ipairs(excluded) do
+    local entry = state.graph.excluded[name]
+    local retained = state.graph.retain_lock[name] and lock.packages[name]
+    rows[#rows + 1] = {name=name, state="excluded", exclusion=entry.reason,
+      loaded=false, managed=false, origins=copy(entry.origins),
+      retained_commit=retained and retained.commit or nil}
+  end
   return {packages=rows, operation=state.store.status()}
 end
 
 function M.load(name)
   assert(state, "package manager is not configured")
+  require_active(name)
   local before = wraith.events.listeners("ready")
   state.loader.load(name)
   local listeners = fresh_listeners("ready", before)
@@ -131,6 +150,7 @@ end
 
 function M.unload(name)
   assert(state, "package manager is not configured")
+  require_active(name)
   state.loader.unload(name)
 end
 
@@ -142,6 +162,11 @@ end
 
 function M.plan(action, names)
   assert(state, "package manager is not configured")
+  if names ~= nil then
+    names = fields.array(names, "package names", math.huge)
+    assert(#names > 0, "choose at least one package")
+    for _, name in ipairs(names) do require_active(name) end
+  end
   local id, summary = state.store.plan(action, names)
   return {id=id, summary=summary}
 end

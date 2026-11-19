@@ -43,7 +43,7 @@ assert(table.concat(options.resolve(inherited.by_name.inherited, inherited.optio
 local first = schema.normalize({"https://github.com/owner/tool", "owner/tool"})
 assert(first.by_name.tool.source.url=="https://github.com/owner/tool")
 local disabled = schema.normalize({{"owner/tool",enabled=true},{name="tool",enabled=false}})
-assert(#disabled.ordered==0 and not disabled.by_name.tool.enabled)
+assert(#disabled.ordered==0 and disabled.by_name.tool==nil and disabled.excluded.tool.reason=="disabled")
 local stable = schema.normalize({"owner/first", "owner/second", "owner/first"})
 assert(stable.ordered[1].name=="first" and stable.ordered[2].name=="second")
 
@@ -57,7 +57,8 @@ rejects({{name="tool",url="/tmp/tool"},{name="tool",url="/tmp/tool.git"}}, "conf
 rejects({{name="missing",opts={}}}, "source is missing")
 rejects({{"owner/tool",dependencies={"tool"}}}, "self dependency")
 rejects({{"owner/tool",dependencies={"library"}},"owner/library",{name="library",dependencies={"tool"}}}, "dependency cycle")
-rejects({{"owner/tool",dependencies={"library"}},"owner/library",{name="library",enabled=false}}, "depends on disabled")
+local excluded = schema.normalize({{"owner/tool",dependencies={"library"}},"owner/library",{name="library",enabled=false}})
+assert(#excluded.by_name.tool.dependencies==0 and excluded.excluded.library.reason=="disabled")
 rejects({{"owner/tool",branch="main"},{name="tool",tag="v1"}}, "choose one branch")
 for _, field in ipairs({"priority", "main", "opts", "cmd", "keys", "opts_extend"}) do
   local invalid = {"owner/tool"}; invalid[field]=false

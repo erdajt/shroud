@@ -1,6 +1,7 @@
 local fields = require("wraith.manager.spec_fields")
 local fragments = require("wraith.manager.spec_fragments")
 local importer = require("wraith.manager.spec_imports")
+local resolver = require("wraith.manager.spec_resolution")
 local M = {}
 
 function M.normalize(input, descriptor)
@@ -9,12 +10,13 @@ function M.normalize(input, descriptor)
   local count = 0
   local walk
   local function add(value, depth, origin, reference, parent)
-    local spec, dependencies = collection.add(value, origin, reference, parent)
+    local spec, dependencies, scoped = collection.add(value, origin, reference, parent)
     if dependencies ~= nil then
       walk(dependencies, depth + 1, true, function(dependency)
         collection.depend(spec, dependency)
       end, origin, spec)
     end
+    if scoped ~= nil then walk(scoped, depth + 1, false, nil, origin, spec) end
     return spec.name
   end
 
@@ -52,7 +54,8 @@ function M.normalize(input, descriptor)
     tables[value] = nil
   end
   walk(input, 1)
-  local by_name, declared, recipes, origins = collection.finish()
+  local resolution = resolver.resolve(collection)
+  local by_name, declared, recipes, origins = collection.finish(resolution)
 
   table.sort(declared, function(left, right)
     if left.priority ~= right.priority then return left.priority > right.priority end
@@ -67,13 +70,9 @@ function M.normalize(input, descriptor)
     for _, name in ipairs(spec.dependencies) do
       local target = by_name[name]
       assert(target, "unknown dependency " .. name .. " of " .. spec.name)
-      if spec.enabled and not target.enabled then
-        error(fields.failure(name, origins[name], "enabled package " .. spec.name .. " depends on disabled " .. name), 0)
-      end
       visit(target)
     end
     visiting[spec.name], visited[spec.name] = nil, true
-    if not spec.enabled then return end
     assert(#ordered < 63, "enabled packages exceed 63")
     if spec.main and modules[spec.main] then
       error(fields.failure(modules[spec.main], origins[modules[spec.main]], "duplicate package main module: " .. spec.main), 0)
@@ -101,9 +100,9 @@ function M.normalize(input, descriptor)
   for _, spec in ipairs(declared) do visit(spec) end
   local start = {}
   for _, spec in ipairs(declared) do
-    if spec.enabled and not spec.lazy then start[#start + 1] = spec.name end
+    if not spec.lazy then start[#start + 1] = spec.name end
   end
-  return {ordered=ordered, by_name=by_name, options=recipes, origins=origins, start=start}
+  return {ordered=ordered, by_name=by_name, options=recipes, origins=origins, start=start, excluded=resolution.excluded, retain_lock=resolution.retain_lock}
 end
 
 return M

@@ -15,7 +15,10 @@ package.preload["settings.unknown"]=function() return {{"owner/tool",dependencie
 rejects({{import="settings.unknown"}}, {"unknown dependency", "settings.unknown"})
 package.preload["settings.disabled"]=function() return {{"owner/disabled",enabled=false}} end
 package.preload["settings.parent"]=function() return {{"owner/tool",dependencies={"disabled"}}} end
-rejects({{import="settings.parent"},{import="settings.disabled"}}, {"depends on disabled", "settings.parent", "settings.disabled"})
+local excluded = schema.normalize({{import="settings.parent"},{import="settings.disabled"}})
+assert(#excluded.by_name.tool.dependencies==0 and excluded.excluded.disabled.reason=="disabled")
+assert(excluded.origins.tool[1].module=="settings.parent")
+assert(excluded.excluded.disabled.origins[1].module=="settings.disabled")
 package.preload["settings.cycle_a"]=function() return {{"owner/first",dependencies={"second"}}} end
 package.preload["settings.cycle_b"]=function() return {{"owner/second",dependencies={"first"}}} end
 rejects({{import="settings.cycle_a"},{import="settings.cycle_b"}}, {"dependency cycle", "settings.cycle_a", "settings.cycle_b"})
