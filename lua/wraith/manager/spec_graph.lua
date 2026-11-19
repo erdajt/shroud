@@ -8,26 +8,22 @@ function M.normalize(input, descriptor)
   local imports, tables = importer.new(), {}
   local count = 0
   local walk
-  local function add(value, depth, origin, reference)
-    local spec, dependencies = collection.add(value, origin, reference)
+  local function add(value, depth, origin, reference, parent)
+    local spec, dependencies = collection.add(value, origin, reference, parent)
     if dependencies ~= nil then
       walk(dependencies, depth + 1, true, function(dependency)
-        assert(dependency ~= spec.name, "self dependency: " .. dependency)
-        if not spec.dependency_set[dependency] then
-          spec.dependency_set[dependency] = true
-          spec.dependencies[#spec.dependencies + 1] = dependency
-        end
-      end, origin)
+        collection.depend(spec, dependency)
+      end, origin, spec)
     end
     return spec.name
   end
 
-  walk = function(value, depth, reference, emit, origin)
+  walk = function(value, depth, reference, emit, origin, parent)
     count = count + 1
     assert(depth <= 16 and count <= 1024, "package declarations exceed nesting or entry limits")
     if type(value) == "string" then
       local name = value
-      if not reference or value:find("[/:]") or value == "~" then name = add(value, depth, origin, reference) end
+      if not reference or value:find("[/:]") or value == "~" then name = add(value, depth, origin, reference, parent) end
       if emit then emit(name) end
       return
     end
@@ -40,16 +36,18 @@ function M.normalize(input, descriptor)
       if value[1] ~= nil or value.repo ~= nil or value.url ~= nil or value.dir ~= nil then
         local fragment = {}
         for key, child in pairs(value) do if key ~= "import" and key ~= "cond" then fragment[key] = child end end
-        local name = add(fragment, depth, origin, reference)
+        local name = add(fragment, depth, origin, reference, parent)
         if emit then emit(name) end
         declaration = {import=value.import, name=value.name, enabled=value.enabled, cond=value.cond}
       end
-      imports.load(declaration, depth, reference, emit, walk)
+      imports.load(declaration, depth, reference, emit, function(child, level, dependency, receive, location)
+        walk(child, level, dependency, receive, location, parent)
+      end)
     elseif keyed or type(value[1]) == "string" and #value == 1 and (not reference or value[1]:find("[/:]") or value[1] == "~") then
-      local name = add(value, depth, origin, reference)
+      local name = add(value, depth, origin, reference, parent)
       if emit then emit(name) end
     else
-      for _, child in ipairs(fields.array(value, "package specs", 256)) do walk(child, depth + 1, reference, emit, origin) end
+      for _, child in ipairs(fields.array(value, "package specs", 256)) do walk(child, depth + 1, reference, emit, origin, parent) end
     end
     tables[value] = nil
   end
