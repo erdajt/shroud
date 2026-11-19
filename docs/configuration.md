@@ -1,6 +1,6 @@
 # configuration
 
-[readme](../README.md) · [sources](sources.md)
+[readme](../README.md) · [sources](sources.md) · [imports](imports.md)
 
 split plugin declarations across files or add overrides after an imported spec:
 
