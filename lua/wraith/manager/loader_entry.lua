@@ -16,11 +16,15 @@ function M.select(spec, path, owned, claim)
   local entry
   if spec.main ~= nil then
     local name = fields.main(spec.main)
-    if claim then claim(name) end
+    if claim then
+      local canonical = claim(name)
+      owned = owned or canonical
+    end
     local preload = rawget(preloads, name)
     if owned then
-      assert(owned.entry.name == name and preload == owned.wrapper,
+      assert(owned.entry.name == name,
         "package entry binding changed; use /reload: " .. spec.name)
+      owned.check()
       if owned.entry.kind == "preload" then return owned.entry end
     end
     if preload ~= nil and not owned then
@@ -42,15 +46,18 @@ function M.select(spec, path, owned, claim)
     assert(entry, "package " .. spec.name .. " cannot infer main in " .. path
       .. " (candidates: " .. (#names == 0 and "none" or table.concat(names, ", ")) .. "); set main or config")
     fields.main(entry.name)
-    if claim then claim(entry.name) end
+    if claim then
+      local canonical = claim(entry.name)
+      owned = owned or canonical
+    end
     local preload = rawget(preloads, entry.name)
     assert(owned or preload == nil, "package " .. spec.name .. " inferred main " .. entry.name
       .. " has a preload; set explicit main for an intentional override")
   end
   if owned then
-    assert(owned.entry.name == entry.name and rawget(preloads, entry.name) == owned.wrapper
-      and owned.entry.identity == entry.identity,
+    assert(owned.entry.name == entry.name and owned.entry.identity == entry.identity,
       "package entry source changed; use /reload: " .. spec.name)
+    owned.check()
     return owned.entry
   end
   return entry

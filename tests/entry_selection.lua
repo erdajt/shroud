@@ -67,17 +67,16 @@ package.preload.tool2 = false
 rejects({name="tool2", main="tool2"}, root, "invalid preload")
 package.preload.tool2 = nil
 
-local original = entries.select({name="tool2"}, root)
-local wrapper = function() error("selection must not call owned wrapper") end
-local owned = {entry=original, wrapper=wrapper}
-package.preload.tool2 = wrapper
+local owned = require("wraith.manager.loader_binding").new(entries.select({name="tool2"}, root))
+local original = owned.entry
+owned.install()
 assert(entries.select({name="tool2"}, root, owned)==original)
 assert(entries.select({name="tool2", main="tool2"}, root, owned)==original)
 rejects({name="tool2"}, foreign, "source changed", owned)
 rejects({name="tool2", main="tool2"}, foreign, "source changed", owned)
 package.preload.tool2 = synthetic
-rejects({name="tool2", main="tool2"}, root, "binding changed", owned)
-rejects({name="tool2"}, root, "source changed", owned)
+rejects({name="tool2", main="tool2"}, root, "preload changed", owned)
+rejects({name="tool2"}, root, "preload changed", owned)
 package.preload.tool2 = nil
 
 local preloads, metatable = package.preload, getmetatable(package.preload)

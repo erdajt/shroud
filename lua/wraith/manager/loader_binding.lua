@@ -33,9 +33,11 @@ function M.new(entry)
     assert(not interrupted, "package entry load was interrupted; use /reload: " .. name)
     assert(tables(), "package tables were replaced; use /reload: " .. name)
     assert(not poisoned, "package entry cache is poisoned; use /reload: " .. name)
+    local current = rawget(preloads, name)
+    if not installed and current == wrapper then installed = true end
     local expected = initial
     if installed then expected = wrapper end
-    assert(rawget(preloads, name) == expected, "package entry preload changed; use /reload: " .. name)
+    assert(current == expected, "package entry preload changed; use /reload: " .. name)
   end
 
   -- check verifies cache ownership and per-call selected source execution.
@@ -109,9 +111,9 @@ function M.new(entry)
 
   -- require uses native caching and verifies the selected source supplied its result.
   function self.require()
-    assert(installed, "package entry binding is not installed: " .. name)
     local executed = not rawget(loaded, name)
     local proof = self.check(name, "before", nil, executed)
+    assert(installed, "package entry binding is not installed: " .. name)
     local value = native_require(name)
     self.check(name, "after", proof, executed)
     if not same(value, cached) then
