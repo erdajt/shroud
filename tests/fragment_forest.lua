@@ -1,0 +1,76 @@
+local forests = require("wraith.manager.spec_forest")
+local forest = forests.new()
+local origin = {kind="file",module="plugins.targets",path="/config/plugins/targets.lua"}
+local root = forest.add("root", {opts={root=true}}, origin)
+local child = forest.add("child", {opts={scoped=true}}, nil, root, true)
+local nested = forest.add("nested", {}, nil, child)
+local independent = forest.add("child", {opts={root=true}})
+assert(forest.depend(root, "child"))
+assert(forest.depend(child, "nested"))
+assert(root.id==1 and child.id==2 and nested.id==3 and independent.id==4)
+assert(child.parent==root.id and child.dependency and not nested.dependency)
+assert(table.concat(forest.order, ",")=="root,child,nested")
+assert(root.origin.module==origin.module and root.origin.index==1 and origin.index==nil)
+origin.module = "changed"
+assert(root.origin.module=="plugins.targets")
+
+local fragments, revision = forest.live("root")
+assert(#fragments==1 and revision==2)
+assert(not forest.depend(root, "child"))
+local _, unchanged = forest.live("root")
+assert(revision==unchanged and #root.dependencies==1)
+assert(#forest.live("unknown")==0)
+
+local dirty = forest.remove("root")
+assert(table.concat(dirty, ",")=="root,child,nested")
+fragments, revision = forest.live("child")
+assert(#fragments==1 and fragments[1]==independent and revision==4)
+assert(independent.id==4 and independent.origin.index==4)
+assert(#forest.live("root")==0 and #forest.live("nested")==0)
+assert(#forest.remove("root")==0 and #forest.remove("missing")==0)
+local _, stable = forest.live("child")
+assert(stable==revision)
+assert(#child.dependencies==1 and child.dependencies[1]=="nested")
+
+forest = forests.new()
+local first = forest.add("shared", {opts={first=true}})
+local second = forest.add("shared", {opts={second=true}}, nil, first)
+local other = forest.add("other", {})
+assert(forest.depend(other, "shared"))
+local _, before = forest.live("other")
+assert(#forest.remove("shared")==1)
+assert(not first.alive and not second.alive and other.alive)
+local _, after = forest.live("other")
+assert(before==after and other.dependencies[1]=="shared")
+local restored = forest.add("shared", {})
+assert(restored.id==4 and #forest.order==2)
+
+local function rejects(fn, expected)
+  local ok, err = pcall(fn)
+  assert(not ok and tostring(err):find(expected,1,true), tostring(err))
+end
+rejects(function() forest.depend(other,"other") end,"self dependency")
+rejects(function() forest.depend(first,"other") end,"invalid dependency owner")
+rejects(function() forest.add("orphan",{},nil,first) end,"invalid fragment parent")
+local foreign = forests.new().add("foreign",{})
+rejects(function() forest.add("orphan",{},nil,foreign) end,"invalid fragment parent")
+rejects(function() forest.depend(foreign,"other") end,"invalid dependency owner")
+
+forest = forests.new()
+local parent
+for index=1,16 do parent=forest.add("depth"..index,{},nil,parent) end
+rejects(function() forest.add("deep",{},nil,parent) end,"nesting limits")
+assert(#forest.order==16)
+
+forest = forests.new()
+for index=1,256 do forest.add("package"..index,{}) end
+forest.remove("package1")
+rejects(function() forest.add("overflow",{}) end,"exceed 256")
+assert(#forest.order==256)
+
+forest = forests.new()
+local owner = forest.add("owner",{})
+for index=1,1024 do assert(forest.depend(owner,"ref"..index)) end
+assert(not forest.depend(owner,"ref1"))
+rejects(function() forest.depend(owner,"overflow") end,"exceed 1024")
+assert(#owner.dependencies==1024 and #forest.order==1)
