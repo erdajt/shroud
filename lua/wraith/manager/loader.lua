@@ -85,7 +85,7 @@ function M.new(graph, paths, runtime, selected)
         end
         wraith.plugins.depend(identity.init)
         for _, dependency in ipairs(spec.dependencies) do wraith.plugins.depend(names[dependency].activation) end
-        local opts = options.resolve(spec, {{value=spec.opts}})
+        local opts = options.resolve(spec, graph.options and graph.options[spec.name] or {{value=spec.opts}})
         local result
         if type(spec.config) == "function" then
           result = spec.config(copy(spec), opts)

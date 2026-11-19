@@ -1,24 +1,21 @@
 local fields = require("wraith.manager.spec_fields")
+local fragments = require("wraith.manager.spec_fragments")
 local M = {}
 
 function M.normalize(input, descriptor)
-  local by_name, declared, imports, tables = {}, {}, {}, {}
+  local collection = fragments.new(descriptor)
+  local imports, tables = {}, {}
   local count = 0
   local walk
   local function add(value, depth)
-    local spec = fields.normalize(value, descriptor)
-    assert(not by_name[spec.name], "duplicate package: " .. spec.name)
-    assert(#declared < 256, "package declarations exceed 256")
-    spec.order = #declared + 1
-    by_name[spec.name], declared[#declared + 1] = spec, spec
-    local dependencies
-    if type(value) == "table" then dependencies = value.dependencies end
+    local spec, dependencies = collection.add(value)
     if dependencies ~= nil then
-      local seen = {}
       walk(dependencies, depth + 1, function(dependency)
-        assert(dependency ~= spec.name and not seen[dependency], "duplicate or self dependency: " .. dependency)
-        seen[dependency] = true
-        spec.dependencies[#spec.dependencies + 1] = dependency
+        assert(dependency ~= spec.name, "self dependency: " .. dependency)
+        if not spec.dependency_set[dependency] then
+          spec.dependency_set[dependency] = true
+          spec.dependencies[#spec.dependencies + 1] = dependency
+        end
       end)
     end
     return spec.name
@@ -36,6 +33,8 @@ function M.normalize(input, descriptor)
     end
     assert(type(value) == "table" and not tables[value], "invalid or cyclic package declarations")
     tables[value] = true
+    local keyed = false
+    for key in pairs(value) do if type(key) == "string" then keyed = true end end
     if value.import ~= nil then
       for key in pairs(value) do assert(key == "import", "import cannot contain package fields") end
       local module = value.import
@@ -44,7 +43,7 @@ function M.normalize(input, descriptor)
       imports[module] = true
       walk(require(module), depth + 1, dependency)
       imports[module] = nil
-    elseif value.repo or value.url or value.dir or value.name or type(value[1]) == "string" and #value == 1 and (not dependency or value[1]:find("[/:]") or value[1] == "~") then
+    elseif keyed or type(value[1]) == "string" and #value == 1 and (not dependency or value[1]:find("[/:]") or value[1] == "~") then
       local name = add(value, depth)
       if dependency then dependency(name) end
     else
@@ -53,6 +52,7 @@ function M.normalize(input, descriptor)
     tables[value] = nil
   end
   walk(input, 1)
+  local by_name, declared, recipes = collection.finish()
 
   table.sort(declared, function(left, right)
     if left.priority ~= right.priority then return left.priority > right.priority end
@@ -86,7 +86,7 @@ function M.normalize(input, descriptor)
     ordered[#ordered + 1] = spec
   end
   for _, spec in ipairs(declared) do visit(spec) end
-  return {ordered=ordered, by_name=by_name}
+  return {ordered=ordered, by_name=by_name, options=recipes}
 end
 
 return M
