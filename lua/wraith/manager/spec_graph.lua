@@ -4,7 +4,7 @@ local importer = require("wraith.manager.spec_imports")
 local resolver = require("wraith.manager.spec_resolution")
 local M = {}
 
-function M.normalize(input, descriptor, defaults)
+function M.normalize(input, descriptor, defaults, dev)
   defaults = defaults == nil and {} or defaults
   assert(type(defaults) == "table", "package defaults must be a table")
   for key in pairs(defaults) do assert(key == "cond" or key == "lazy", "unknown package default: " .. tostring(key)) end
@@ -12,7 +12,8 @@ function M.normalize(input, descriptor, defaults)
   assert(defaults.lazy == nil or type(defaults.lazy) == "boolean", "default lazy must be boolean")
   defaults = fields.copy(defaults)
 
-  local collection = fragments.new(descriptor)
+  local settings = require("wraith.manager.spec_development").settings(dev)
+  local collection = fragments.new(descriptor, settings)
   local imports, tables = importer.new(), {}
   local count = 0
   local walk

@@ -23,7 +23,7 @@ function M.settings(value)
 end
 
 -- select separates declared revision intent from the directory used for activation.
-function M.select(record, settings)
+function M.select(record, settings, budget)
   local raw, declared = record.raw, record.source
   local result = {source=fields.copy(declared), dev=raw.dev, declared_source=fields.copy(declared),
     declared_selector=fields.copy(record.selector), declared_pin=raw.pin == true}
@@ -46,7 +46,12 @@ function M.select(record, settings)
     local snapshot = {}
     for key, value in pairs(raw) do snapshot[key] = value end
     snapshot.name, snapshot.url, snapshot.dev, snapshot.dir = record.name, declared.url, true, nil
-    path = path(fields.copy(snapshot))
+    snapshot = fields.copy(snapshot)
+    if budget then
+      assert(budget.calls < 1024, "development path evaluations exceed 1024")
+      budget.calls = budget.calls + 1
+    end
+    path = path(snapshot)
   else
     path = path .. "/" .. record.name
   end

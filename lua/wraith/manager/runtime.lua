@@ -92,7 +92,11 @@ function M.status()
     local chosen = state.selected[row.name]
     row.loaded, row.managed = states[row.name].loaded, states[row.name].managed
     row.installed = row.path ~= nil
-    row.lazy = state.graph.by_name[row.name].lazy
+    local spec = state.graph.by_name[row.name]
+    row.lazy, row.dev = spec.lazy, spec.dev
+    for _, field in ipairs({"declared_source", "declared_selector", "declared_pin"}) do
+      row[field] = copy(spec[field])
+    end
     row.loaded_commit = row.loaded and chosen and chosen.commit or nil
     for _, field in ipairs({"requested_main", "selected_main", "loaded_main", "main_source_kind", "main_source_path"}) do
       row[field] = states[row.name][field]

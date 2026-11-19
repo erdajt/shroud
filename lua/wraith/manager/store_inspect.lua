@@ -17,7 +17,11 @@ function M.read(specs, options)
     if spec.source.kind == "local" then
       row.state = "local"
       local ok, stat = pcall(wraith.fs.stat, spec.source.dir, { follow = true })
-      if ok and stat.type == "directory" then row.path = spec.source.dir else row.error = "local package directory is unavailable" end
+      if ok and stat.type == "directory" then
+        row.path = spec.source.dir
+      else
+        row.error = "local package directory " .. spec.source.dir .. ": " .. (ok and "not a directory" or tostring(stat))
+      end
     elseif entry and wraith.json.encode(entry.source) ~= wraith.json.encode(spec.source) then
       row.state, row.error = "source-conflict", "package source changed; use a distinct name or reconcile the lock"
     elseif entry then

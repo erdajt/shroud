@@ -104,8 +104,8 @@ function M.descriptor(value)
   return result
 end
 
-function M.normalize(value, defaults)
-  return require("wraith.manager.spec_graph").normalize(value, M.descriptor, defaults)
+function M.normalize(value, defaults, dev)
+  return require("wraith.manager.spec_graph").normalize(value, M.descriptor, defaults, dev)
 end
 
 return M

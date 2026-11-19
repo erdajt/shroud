@@ -3,6 +3,7 @@ local schema = require("wraith.manager.spec")
 local sources = require("wraith.manager.spec_source")
 local options = require("wraith.manager.spec_options")
 local forests = require("wraith.manager.spec_forest")
+local development = require("wraith.manager.spec_development")
 local M = {}
 
 -- source_key compares remote suffix variants without rewriting the first selected transport.
@@ -25,7 +26,7 @@ local function fold(record, fragment)
     record.remote, record.raw.url = source, source.url
   end
   if fragment.dir then record.raw.dir = fragment.dir end
-  for _, key in ipairs({"main", "enabled", "cond", "priority", "lazy", "init", "config", "branch", "tag", "commit", "pin"}) do
+  for _, key in ipairs({"main", "enabled", "cond", "priority", "lazy", "dev", "init", "config", "branch", "tag", "commit", "pin"}) do
     if raw[key] ~= nil then record.raw[key] = raw[key] end
   end
 
@@ -65,8 +66,10 @@ local function fold(record, fragment)
 end
 
 -- new collects detached declarations before resolving callbacks or graph edges.
-function M.new(descriptor)
+function M.new(descriptor, settings)
+  settings = settings or development.settings()
   local forest, selected, cache = forests.new(), {}, {}
+  local selections, budget = {}, {calls=0}
   local self = {order=forest.order, depend=forest.depend, remove=forest.remove}
 
   function self.add(value, origin, dependency, parent)
@@ -117,9 +120,30 @@ function M.new(descriptor)
     return record, revision
   end
 
+  function self.selection(name)
+    local record, revision = self.merged(name)
+    if not record then return nil end
+    local previous = selections[name]
+    if previous and previous.revision == revision then return previous.value end
+    local ok, value = pcall(development.select, record, settings, budget)
+    if not ok then error(fields.failure(name, record.origins, value), 0) end
+    selections[name] = {revision=revision, value=value}
+    return value
+  end
+
+  function self.snapshot(name, dependencies)
+    local record, snapshot = assert(self.merged(name)), {}
+    for key, value in pairs(record.raw) do snapshot[key] = value end
+    local selection = self.selection(name)
+    snapshot.dependencies = dependencies
+    snapshot.dir, snapshot.dev = selection.dir, selection.dev
+    return fields.copy(snapshot)
+  end
+
   function self.finish(resolution, default_lazy)
     local by_name, declared, recipes, origins = {}, {}, {}, {}
     for _, name in ipairs(forest.order) do self.merged(name) end
+    for _, name in ipairs(forest.order) do self.selection(name) end
     for index, name in ipairs(forest.order) do
       local record = self.merged(name)
       if record then
@@ -134,7 +158,7 @@ function M.new(descriptor)
             dependencies = assert(resolution.dependencies[name], "missing resolved dependencies: " .. name)
             raw.dependencies = dependencies
           end
-          local value = fields.normalize(raw, descriptor, record.dependency_only, default_lazy)
+          local value = fields.normalize(raw, descriptor, record.dependency_only, default_lazy, self.selection(name))
           value.dependencies, value.order = fields.copy(dependencies), index
           return value
         end)

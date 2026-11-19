@@ -186,12 +186,15 @@ function M.new(graph, paths, runtime, selected)
     local spec = assert(graph.by_name[name], "unknown package: " .. tostring(name))
     assert(spec.enabled and names[name], "package is disabled: " .. name)
     if self.is_loaded(name) then return end
-    local path = assert(paths[name], "package is not installed; install and reload: " .. name)
+    local chosen = selected[name]
+    local missing = chosen and chosen.error and ("package " .. name .. ": " .. chosen.error)
+      or "package is not installed; install and reload: " .. name
+    local path = assert(paths[name], missing)
     if not self.is_managed(name) then
       package.loaded[names[name].init] = nil
       wraith.plugins.load(names[name].init, {}, {dependency=false})
     end
-    local commit = selected[name] and selected[name].commit
+    local commit = chosen and chosen.commit
     local binding = sources.prepare(spec, path, commit)
     for _, dependency in ipairs(spec.dependencies) do self.load(dependency) end
     sources.reserve(spec, path, commit, binding)

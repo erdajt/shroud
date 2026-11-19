@@ -32,7 +32,7 @@ fragments follow declaration order, including imports and nested dependencies. t
 | `dependencies` | names combine in first-seen order; nested declarations also merge |
 | `cmd`, `event` | triggers combine in first-seen order |
 | `keys` | later action replaces the same normalized key and mode |
-| `init`, `config`, `enabled`, `cond`, `lazy`, `priority`, `main`, `pin`, `dir` | last supplied value wins |
+| `init`, `config`, `enabled`, `cond`, `lazy`, `priority`, `main`, `pin`, `dir`, `dev` | last supplied value wins |
 
 `opts_extend` takes effect from its declaration onward. it does not change earlier merges. an empty list resets extension paths. when both inherited and new targets are tables, both must be lists; otherwise the value follows normal merge rules. duplicate key aliases inside one fragment remain an error; overrides belong in separate fragments.
 
@@ -117,3 +117,9 @@ callbacks receive the declared `main`, which stays nil when inferred. status rep
 once exposed, package source, checkout, requested main and resolved entrypoint remain fixed for the runtime. changing them requires `/reload`. unknown cached modules are rejected before setup. clearing an owned cache permits the same source to load again; it does not permit a source change. ordinary source exceptions retry when native require cleared its own marker. setup failures reuse the owned module. source errors that changed the cache or preload require reload.
 
 a timed-out entry load requires `/reload` because its Lua bookkeeping may not finish. shroud preserves source-written cache values and never adopts them after interruption. managed source failures include source stack traces as diagnostic strings. replacing package/cache/preload tables before manager loading is unsupported; replacing captured tables afterward is rejected. direct calls to the manager's private preload wrappers are unsupported; use `require` or a [bound source loader](https://github.com/erdajt/wraith/blob/main/docs/lua/modules.md).
+
+## development selection
+
+set per-plugin `dev` or setup `dev.path`, `dev.patterns` and `dev.fallback` to select [development copies](sources.md#development-copies). settings are validated and detached before imports run. all changed declarations pass merged selector and trigger checks before their path callbacks run. scoped overrides use the last surviving `dir` and `dev`; removing an override restores the surviving source choice.
+
+path callbacks receive a detached merged snapshot. cond and enabled snapshots include the selected local directory and development state. init, opts and config receive normalized source metadata; declared remote revision intent remains separate from the local source used for activation.

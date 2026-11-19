@@ -10,15 +10,14 @@ function M.resolve(collection, default_cond)
     records[name], revisions[name] = collection.merged(name)
   end
 
+  for _, name in ipairs(collection.order) do collection.selection(name) end
+
   local function evaluate(name, record, gate, names, label)
     if type(gate) ~= "function" then return gate ~= false end
     local ok, result = pcall(function()
       calls = calls + 1
       assert(calls <= 1024, "package gate evaluations exceed 1024")
-      local snapshot = {}
-      for key, value in pairs(record.raw) do snapshot[key] = value end
-      snapshot.dependencies = names
-      local value = gate(fields.copy(snapshot))
+      local value = gate(collection.snapshot(name, names))
       assert(type(value) == "boolean", label .. " must return boolean")
       return value
     end)
@@ -55,13 +54,15 @@ function M.resolve(collection, default_cond)
 
   local function remove(name, reason)
     if reason == "disabled" and not records[name].optional then retain_lock[name] = true end
-    for _, changed in ipairs(collection.remove(name)) do
+    local dirty = collection.remove(name)
+    for _, changed in ipairs(dirty) do
       local previous = records[changed]
       records[changed], revisions[changed] = collection.merged(changed)
       if not records[changed] then
         excluded[changed] = {name=changed, reason=changed == name and reason or "scope", origins=fields.copy(previous.origins)}
       end
     end
+    for _, changed in ipairs(dirty) do collection.selection(changed) end
   end
 
   while true do

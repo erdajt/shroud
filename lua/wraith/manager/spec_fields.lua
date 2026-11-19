@@ -3,7 +3,7 @@ local sources = require("wraith.manager.spec_source")
 local specification = require("wraith.manager.spec")
 local allowed = {name=true, repo=true, url=true, dir=true, main=true, dependencies=true, enabled=true,
   priority=true, lazy=true, cmd=true, event=true, keys=true, init=true, opts=true, config=true,
-  branch=true, tag=true, commit=true, pin=true, opts_extend=true, optional=true, specs=true, cond=true}
+  branch=true, tag=true, commit=true, pin=true, opts_extend=true, optional=true, specs=true, cond=true, dev=true}
 
 function M.array(value, label, limit)
   assert(type(value) == "table", label .. " must be an array")
@@ -155,6 +155,7 @@ function M.declaration(value)
   assert(value.cond == nil or type(value.cond) == "boolean" or type(value.cond) == "function", "cond must be boolean or function")
   assert(value.priority == nil or type(value.priority) == "number" and value.priority % 1 == 0 and math.abs(value.priority) <= 1000000, "priority must be an integer within 1000000")
   assert(value.lazy == nil or type(value.lazy) == "boolean", "lazy must be boolean")
+  assert(value.dev == nil or type(value.dev) == "boolean", "dev must be boolean")
   assert(value.init == nil or type(value.init) == "function", "init must be a function")
   assert(value.config == nil or type(value.config) == "boolean" or type(value.config) == "function", "config must be boolean or function")
   assert(value.dependencies == nil or type(value.dependencies) == "table" or type(value.dependencies) == "string", "dependencies must be declarations or a package name")
@@ -167,15 +168,18 @@ function M.declaration(value)
 end
 
 -- normalize resolves one validated merged declaration and evaluates enabled once.
-function M.normalize(value, descriptor, dependency, default_lazy)
+function M.normalize(value, descriptor, dependency, default_lazy, selection)
   value = M.declaration(value)
   local source, basename, declared = sources.normalize(value)
   local selected, commands, events, keys = M.preflight(value)
+  if selection then source = M.copy(selection.source) end
   local local_override = declared.remote and source.kind == "local"
   local result = descriptor({name=value.name == nil and basename:lower() or value.name, source=source,
     selector=local_override and {kind="head"} or selected, pin=not local_override and value.pin or false})
   result.declared_source = M.copy(declared.remote or source)
   result.declared_selector, result.declared_pin = M.copy(selected), value.pin == true
+  if selection then result.dev = selection.dev else result.dev = value.dev end
+  result.dir = source.kind == "local" and source.dir or nil
   result.main = value.main ~= nil and M.main(value.main) or nil
   result.priority = value.priority == nil and 50 or value.priority
   result.init, result.opts, result.config = value.init, M.copy(value.opts), value.config
@@ -186,7 +190,9 @@ function M.normalize(value, descriptor, dependency, default_lazy)
 
   result.enabled = value.enabled ~= false
   if type(value.enabled) == "function" then
-    result.enabled = value.enabled(M.copy(value))
+    local snapshot = M.copy(value)
+    snapshot.dir, snapshot.dev = source.kind == "local" and source.dir or nil, result.dev
+    result.enabled = value.enabled(snapshot)
     assert(type(result.enabled) == "boolean", "enabled must return boolean")
   end
   return result

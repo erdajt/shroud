@@ -38,3 +38,21 @@ a named declaration can add or replace a local directory before or after the rem
 HTTP, credentials embedded in URLs, query strings, fragments, control characters and option-shaped hosts or refs are rejected. configure authentication through the manager's git environment options. installing a plugin grants it your user account's permissions.
 
 open `/packages` to inspect and install Git packages. after installation, `/reload` loads the selected revisions into a fresh runtime. automatic installation and the remaining lazy.nvim workflows are still being implemented.
+
+## development copies
+
+```lua
+require("shroud").setup({
+  { "owner/tool", dev = true, opts = {} },
+}, {
+  dev = { path = "~/projects", patterns = { "owner/" }, fallback = false },
+})
+```
+
+`dev.path` defaults to `~/projects`. a string selects `path/name`; a function receives a detached plugin snapshot and returns the full directory. relative paths resolve below wraith's effective config directory. `patterns` defaults to `{}` and matches literal substrings of the declared remote URL. `dev = true` selects a development copy; `dev = false` suppresses pattern matching. an explicit `dir` wins and skips the development callback and fallback check. local directories do not imply `dev = true`.
+
+`fallback` defaults to `false`: a missing development directory stays local and reports its path when loading fails. with `fallback = true`, a followed directory is local; a missing path, dangling symlink, regular file or file ancestor selects the remote instead. permission failures, symlink loops and cancellation remain errors. invalid callback results never trigger fallback.
+
+path callbacks see `name`, the declared `url`, original revision fields and `dev = true`, with no selected `dir` yet. cond and enabled callbacks see the selected `dir` and `dev`; remote fallback has `dev = false` and no local directory. selection is cached per surviving fragment revision. removing a scope recomputes changed plugins; removing only a dependency edge does not rerun the path callback. each normalization permits at most 1024 path callback invocations. disabled or optional plugins may run path callbacks before pruning.
+
+normalization does not fetch or run git. local copies preserve their files and use no operational git selector or pin. remote fallback keeps the declared selector and pin. status reports `dev` and detached `declared_source`, `declared_selector` and `declared_pin` from the selected configuration. switching a source already exposed to Lua requires `/reload`; a disappearing local directory does not trigger a mid-load remote fetch.

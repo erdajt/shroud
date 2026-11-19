@@ -4,9 +4,9 @@ local runtime = "wraith.manager.runtime"
 function M.setup(specs, options)
   options = options == nil and {} or options
   assert(type(options) == "table", "manager options must be a table")
-  for key in pairs(options) do assert(key == "ui" or key == "storage" or key == "defaults", "unknown manager option: " .. tostring(key)) end
+  for key in pairs(options) do assert(key == "ui" or key == "storage" or key == "defaults" or key == "dev", "unknown manager option: " .. tostring(key)) end
   for _, name in ipairs(wraith.plugins.list()) do assert(name ~= runtime, "package manager is already configured") end
-  local graph = require("wraith.manager.spec").normalize(specs, options.defaults)
+  local graph = require("wraith.manager.spec").normalize(specs, options.defaults, options.dev)
   assert(#graph.ordered * 2 + #wraith.plugins.list() + 1 <= 128, "managed packages exceed available lifecycle capacity")
   wraith.plugins.load(runtime, {}, {dependency=false})
   local ok, err = pcall(wraith.plugins.call, runtime, "configure", graph, require("wraith.manager.spec_fields").copy(options))
