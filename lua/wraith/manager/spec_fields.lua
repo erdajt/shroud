@@ -34,6 +34,25 @@ function M.copy(value)
   return visit(value, 1)
 end
 
+-- failure retains bounded configuration origins after the import stack has unwound.
+function M.failure(name, origins, failure)
+  local lines = {tostring(failure):sub(1,4096), "package " .. name .. " declared at:"}
+  local seen = {}
+  for index, origin in ipairs(origins or {}) do
+    if index <= 4 or index > #origins - 4 then
+      local location = origin.module and ((origin.import or origin.module) .. ": " .. origin.module) or "fragment " .. origin.index
+      if origin.path then location = location .. " (" .. origin.path .. ")" end
+      if not seen[location] then
+        seen[location] = true
+        lines[#lines + 1] = location:sub(1,384)
+      end
+    elseif index == 5 then
+      lines[#lines + 1] = "additional origins omitted"
+    end
+  end
+  return table.concat(lines, "\n"):sub(1,8192)
+end
+
 local function strings(value, label)
   if value == nil then return {} end
   if type(value) == "string" then value = {value} end

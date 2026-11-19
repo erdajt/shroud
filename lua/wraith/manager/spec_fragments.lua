@@ -19,7 +19,7 @@ function M.new(descriptor)
   local records, ordered, count = {}, {}, 0
   local self = {}
 
-  function self.add(value)
+  function self.add(value, origin)
     local raw = fields.declaration(value)
     count = count + 1
     assert(count <= 256, "package declarations exceed 256")
@@ -38,9 +38,12 @@ function M.new(descriptor)
 
     local record = records[name]
     if not record then
-      record = {name=name, raw={name=name}, dependencies={}, dependency_set={}, layers={}, extend={}, lists={}, keys={}}
+      record = {name=name, raw={name=name}, dependencies={}, dependency_set={}, layers={}, extend={}, lists={}, keys={}, origins={}}
       records[name], ordered[#ordered + 1] = record, record
     end
+    local location = fields.copy(origin or {kind="declaration"})
+    location.index = count
+    record.origins[#record.origins + 1] = location
     if source then
       assert(not record.source or source_key(record.source) == source_key(source), "conflicting source for package " .. name)
       if not record.source then
@@ -84,16 +87,21 @@ function M.new(descriptor)
   end
 
   function self.finish()
-    local by_name, declared, recipes = {}, {}, {}
+    local by_name, declared, recipes, origins = {}, {}, {}, {}
     for index, record in ipairs(ordered) do
-      assert(record.source, "package source is missing: " .. record.name)
-      record.raw.dependencies = fields.copy(record.dependencies)
-      local spec = fields.normalize(record.raw, descriptor)
-      spec.dependencies, spec.order = fields.copy(record.dependencies), index
+      local ok, spec = pcall(function()
+        assert(record.source, "package source is missing: " .. record.name)
+        record.raw.dependencies = fields.copy(record.dependencies)
+        local value = fields.normalize(record.raw, descriptor)
+        value.dependencies, value.order = fields.copy(record.dependencies), index
+        return value
+      end)
+      if not ok then error(fields.failure(record.name, record.origins, spec), 0) end
       recipes[spec.name] = options.capture(record.layers)
+      origins[spec.name] = fields.copy(record.origins)
       by_name[spec.name], declared[#declared + 1] = spec, spec
     end
-    return by_name, declared, recipes
+    return by_name, declared, recipes, origins
   end
   return self
 end
