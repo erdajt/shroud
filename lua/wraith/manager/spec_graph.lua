@@ -4,7 +4,13 @@ local importer = require("wraith.manager.spec_imports")
 local resolver = require("wraith.manager.spec_resolution")
 local M = {}
 
-function M.normalize(input, descriptor)
+function M.normalize(input, descriptor, defaults)
+  defaults = defaults == nil and {} or defaults
+  assert(type(defaults) == "table", "package defaults must be a table")
+  for key in pairs(defaults) do assert(key == "cond", "unknown package default: " .. tostring(key)) end
+  assert(defaults.cond == nil or type(defaults.cond) == "boolean" or type(defaults.cond) == "function", "default cond must be boolean or function")
+  defaults = fields.copy(defaults)
+
   local collection = fragments.new(descriptor)
   local imports, tables = importer.new(), {}
   local count = 0
@@ -37,7 +43,7 @@ function M.normalize(input, descriptor)
       local declaration = value
       if value[1] ~= nil or value.repo ~= nil or value.url ~= nil or value.dir ~= nil then
         local fragment = {}
-        for key, child in pairs(value) do if key ~= "import" and key ~= "cond" then fragment[key] = child end end
+        for key, child in pairs(value) do if key ~= "import" then fragment[key] = child end end
         local name = add(fragment, depth, origin, reference, parent)
         if emit then emit(name) end
         declaration = {import=value.import, name=value.name, enabled=value.enabled, cond=value.cond}
@@ -54,7 +60,7 @@ function M.normalize(input, descriptor)
     tables[value] = nil
   end
   walk(input, 1)
-  local resolution = resolver.resolve(collection)
+  local resolution = resolver.resolve(collection, defaults.cond)
   local by_name, declared, recipes, origins = collection.finish(resolution)
 
   table.sort(declared, function(left, right)
@@ -102,7 +108,7 @@ function M.normalize(input, descriptor)
   for _, spec in ipairs(declared) do
     if not spec.lazy then start[#start + 1] = spec.name end
   end
-  return {ordered=ordered, by_name=by_name, options=recipes, origins=origins, start=start, excluded=resolution.excluded, retain_lock=resolution.retain_lock}
+  return {ordered=ordered, by_name=by_name, options=recipes, origins=origins, start=start, excluded=resolution.excluded, retain_lock=resolution.retain_lock, retain_install=resolution.retain_install}
 end
 
 return M

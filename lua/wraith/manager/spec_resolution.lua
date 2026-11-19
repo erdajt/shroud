@@ -2,12 +2,47 @@ local fields = require("wraith.manager.spec_fields")
 local M = {}
 
 -- resolve removes inactive fragment scopes before final source and graph validation.
-function M.resolve(collection)
+function M.resolve(collection, default_cond)
   local records, revisions, known, decisions = {}, {}, {}, {}
-  local excluded, retain_lock, calls = {}, {}, 0
+  local excluded, retain_lock, retain_install, conditional, calls = {}, {}, {}, {}, 0
   for _, name in ipairs(collection.order) do
     known[name] = true
     records[name], revisions[name] = collection.merged(name)
+  end
+
+  local function evaluate(name, record, gate, names, label)
+    if type(gate) ~= "function" then return gate ~= false end
+    local ok, result = pcall(function()
+      calls = calls + 1
+      assert(calls <= 1024, "package gate evaluations exceed 1024")
+      local snapshot = {}
+      for key, value in pairs(record.raw) do snapshot[key] = value end
+      snapshot.dependencies = names
+      local value = gate(fields.copy(snapshot))
+      assert(type(value) == "boolean", label .. " must return boolean")
+      return value
+    end)
+    if not ok then error(fields.failure(name, record.origins, result), 0) end
+    return result
+  end
+
+  for _, name in ipairs(collection.order) do
+    local record = records[name]
+    if record then
+      local condition = record.raw.cond
+      if condition == nil then condition = default_cond end
+      if not evaluate(name, record, condition, record.dependencies, "cond") then
+        conditional[name] = true
+        local stack = {name}
+        while #stack > 0 do
+          local current = table.remove(stack)
+          if records[current] and not retain_install[current] then
+            retain_install[current], retain_lock[current] = true, true
+            for _, dependency in ipairs(records[current].dependencies) do stack[#stack + 1] = dependency end
+          end
+        end
+      end
+    end
   end
 
   local function dependencies(record)
@@ -39,26 +74,12 @@ function M.resolve(collection)
           local signature = table.concat(names, "\0")
           local decision = decisions[name]
           if not decision or decision.revision ~= revisions[name] or decision.dependencies ~= signature then
-            local enabled = record.raw.enabled ~= false
-            if type(record.raw.enabled) == "function" then
-              local ok, result = pcall(function()
-                calls = calls + 1
-                assert(calls <= 1024, "package gate evaluations exceed 1024")
-                local snapshot = {}
-                for key, value in pairs(record.raw) do snapshot[key] = value end
-                snapshot.dependencies = names
-                local value = record.raw.enabled(fields.copy(snapshot))
-                assert(type(value) == "boolean", "enabled must return boolean")
-                return value
-              end)
-              if not ok then error(fields.failure(name, record.origins, result), 0) end
-              enabled = result
-            end
+            local enabled = not conditional[name] and evaluate(name, record, record.raw.enabled, names, "enabled")
             decision = {revision=revisions[name], dependencies=signature, enabled=enabled}
             decisions[name] = decision
           end
           if not decision.enabled then
-            remove(name, "disabled")
+            remove(name, conditional[name] and "conditional" or "disabled")
             removed = true
             break
           end
@@ -85,7 +106,7 @@ function M.resolve(collection)
       enabled[name], resolved[name] = true, dependencies(records[name])
     end
   end
-  return {enabled=enabled, dependencies=resolved, excluded=excluded, retain_lock=retain_lock}
+  return {enabled=enabled, dependencies=resolved, excluded=excluded, retain_lock=retain_lock, retain_install=retain_install}
 end
 
 return M

@@ -3,7 +3,7 @@ local sources = require("wraith.manager.spec_source")
 local specification = require("wraith.manager.spec")
 local allowed = {name=true, repo=true, url=true, dir=true, main=true, dependencies=true, enabled=true,
   priority=true, lazy=true, cmd=true, event=true, keys=true, init=true, opts=true, config=true,
-  branch=true, tag=true, commit=true, pin=true, opts_extend=true, optional=true, specs=true}
+  branch=true, tag=true, commit=true, pin=true, opts_extend=true, optional=true, specs=true, cond=true}
 
 function M.array(value, label, limit)
   assert(type(value) == "table", label .. " must be an array")
@@ -144,6 +144,7 @@ function M.declaration(value)
   end
   if value.main ~= nil then M.main(value.main) end
   assert(value.enabled == nil or type(value.enabled) == "boolean" or type(value.enabled) == "function", "enabled must be boolean or function")
+  assert(value.cond == nil or type(value.cond) == "boolean" or type(value.cond) == "function", "cond must be boolean or function")
   assert(value.priority == nil or type(value.priority) == "number" and value.priority % 1 == 0 and math.abs(value.priority) <= 1000000, "priority must be an integer within 1000000")
   assert(value.lazy == nil or type(value.lazy) == "boolean", "lazy must be boolean")
   assert(value.init == nil or type(value.init) == "function", "init must be a function")

@@ -44,7 +44,7 @@ imports load sources afresh and clear their own `package.loaded` entries without
 { "owner/tool.wraith", main = "tool", import = "tool_specs" }
 ```
 
-a source declaration can also import specs. the package fragment is collected first. an explicit package `name` also names its import; a function import therefore requires an explicit name. `cond` applies to the import. `enabled` participates in both the zero-argument import gate and final package evaluation, so a shared function can run in both contexts.
+a source declaration can also import specs. the package fragment is collected first. an explicit package `name` also names its import; a function import therefore requires an explicit name. `cond` and `enabled` participate in both the zero-argument import gate and package evaluation with a detached spec argument. a shared function can run in both contexts. manager `defaults.cond` applies only to packages, not import gates.
 
 ## bounds
 

@@ -32,7 +32,7 @@ fragments follow declaration order, including imports and nested dependencies. t
 | `dependencies` | names combine in first-seen order; nested declarations also merge |
 | `cmd`, `event` | triggers combine in first-seen order |
 | `keys` | later action replaces the same normalized key and mode |
-| `init`, `config`, `enabled`, `lazy`, `priority`, `main`, `pin` | last supplied value wins |
+| `init`, `config`, `enabled`, `cond`, `lazy`, `priority`, `main`, `pin` | last supplied value wins |
 
 `opts_extend` takes effect from its declaration onward. it does not change earlier merges. an empty list resets extension paths. when both inherited and new targets are tables, both must be lists; otherwise the value follows normal merge rules. duplicate key aliases inside one fragment remain an error; overrides belong in separate fragments.
 
@@ -52,7 +52,23 @@ choose one revision selector across the merged plugin: `branch`, `tag` or `commi
 
 collection precedes pruning, including trusted import execution. malformed declarations and conflicting sources fail before pruning. final dependency and trigger checks use survivors. references to known excluded packages disappear; unknown dependencies still fail. scoped self-overrides are allowed.
 
-excluded packages do not run init or setup, register triggers or install missing sources. explicit load, unload and install requests report the exclusion reason. change the configuration and reload to activate them. status distinguishes `disabled`, `optional` and `scope`; an existing explicitly disabled nonoptional package pin is labeled `retained pin`, without claiming an installed checkout. optional-only and scope-removed entries are pruned from the lock on install/update. files are retained; object garbage collection is not implemented.
+excluded packages do not run init or setup, register triggers or install missing sources. explicit load, unload and install requests report the exclusion reason. change the configuration and reload to activate them. status distinguishes `disabled`, `conditional`, `optional` and `scope`; an existing explicitly disabled nonoptional package pin is labeled `retained pin`, without claiming an installed checkout. optional-only and scope-removed entries are pruned from the lock on install/update unless a false condition protects them. files are retained; object garbage collection is not implemented.
+
+## conditions
+
+```lua
+require("shroud").setup({
+  { "owner/review.wraith", cond = function()
+    return os.getenv("WRAITH_REVIEW") == "1"
+  end },
+}, { defaults = { cond = true } })
+```
+
+package `cond` overrides `defaults.cond`; both accept booleans or functions returning a boolean. functions receive a detached initial merged spec with original dependency names. each condition runs once in declaration order before disabled/optional pruning. false bypasses enabled evaluation and activation. changing contributions later does not reverse that initial decision. defaults are validated before imports; unsupported defaults fail rather than being ignored.
+
+a false condition protects existing pins for its original declared dependency closure, including optional conditional roots. scoped children are not included by ownership alone. cycles are safe in excluded closures; unknown references never protect unrelated pins. a conditional child removed with its parent keeps its protection even when its exclusion reason is scope. independently active dependencies follow their normal source and revision rules, including removal of old git pins when made local.
+
+retention does not install missing plugins, create new pins or verify existing objects. native object cleanup is not implemented. explicit loading cannot override a false condition; change the configuration and reload.
 
 ## option callbacks
 
@@ -64,7 +80,7 @@ end }
 
 callbacks receive the final plugin spec and options inherited so far. returning `nil` retains mutations; returning a table replaces the options. `wraith.json.null` in a table declaration removes a map value. an empty map preserves inherited map fields, while an empty table replaces an inherited list. options and callback arguments are detached from the input declarations.
 
-option callbacks run when the plugin activates. `enabled` runs once per effective contribution and dependency revision during normalization. removing a scope may change that revision; unchanged predicates are not repeated. callbacks receive detached merged fields and effective dependency names, without recursive `specs`. normalization allows at most 1,024 predicate calls. `init` and `config` retain their lifecycle timing. invalid declarations, cycles and structural limits fail before initialization. option failures during activation roll back owned registrations; a later load can retry.
+option callbacks run when the plugin activates. `enabled` runs once per effective contribution and dependency revision during normalization. removing a scope may change that revision; unchanged predicates are not repeated. callbacks receive detached merged fields and effective dependency names, without recursive `specs`. normalization allows at most 1,024 combined `cond` and `enabled` predicate calls. `init` and `config` retain their lifecycle timing. invalid declarations, cycles and structural limits fail before initialization. option failures during activation roll back owned registrations; a later load can retry.
 
 specs allow 256 fragments and 63 enabled plugins. option copying allows 4096 entries and depth 16, including inherited recipes and callback results. these are structural limits, not byte limits for strings.
 
