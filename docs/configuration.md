@@ -69,3 +69,17 @@ without `opts` or a truthy `config`, activation exposes the package path without
 `config = function(plugin, opts) ... end` owns setup and any require calls. its returned cleanup function runs on unload; shroud does not infer a module teardown for that callback. automatic setup retains its returned cleanup and the module's `teardown`, each called once on unload or failed publication.
 
 unlike lazy.nvim's logged setup errors, failed shroud setup rejects activation and rolls back owned registrations. its original lazy trigger remains available for retry. require caches, runtime paths and arbitrary external effects remain outside that rollback.
+
+## entrypoints
+
+explicit `main` selects that module inside the installed plugin. otherwise, automatic setup inspects immediate files and directories with `init.lua` under its `lua/` directory. it selects one normalized name match, then a sole candidate. missing or ambiguous candidates require `main` or a custom `config` function.
+
+name matching lowercases names, strips `wraith-`, `.wraith`, `.lua` and `-lua` affixes, and ignores separators. digits remain significant. exact module names use dotted identifiers; each part starts with a letter or underscore. `shroud` and `wraith.manager` namespaces are reserved. two explicit `main` declarations cannot claim the same name, even when configuration is skipped.
+
+inferred setup loads the selected file through native `require` caching. it cannot fall back to a same-named configuration file or global preload. explicit `main` may select a deliberate `package.preload` function; diagnostics label that source `preload`. custom config controls its own require calls. libraries without setup do not claim an entrypoint. binding every plugin submodule is a separate capability, not provided by entrypoint selection.
+
+callbacks receive the declared `main`, which stays nil when inferred. status reports `requested_main`, `selected_main`, `loaded_main`, `main_source_kind` and `main_source_path` separately. `loaded_main` exists only during active automatic setup. selected provenance survives unload and failed publication; a checkout commit does not identify a synthetic preload's code.
+
+once exposed, package source, checkout, requested main and resolved entrypoint remain fixed for the runtime. changing them requires `/reload`. unknown cached modules are rejected before setup. clearing an owned cache permits the same source to load again; it does not permit a source change. ordinary source exceptions retry when native require cleared its own marker. setup failures reuse the owned module. source errors that changed the cache or preload require reload.
+
+a timed-out entry load requires `/reload` because its Lua bookkeeping may not finish. shroud preserves source-written cache values and never adopts them after interruption. managed source failures include source stack traces as diagnostic strings. replacing package/cache/preload tables before manager loading is unsupported; replacing captured tables afterward is rejected. direct calls to the manager's private preload wrappers are unsupported; use `require` or a [bound source loader](https://github.com/erdajt/wraith/blob/main/docs/lua/modules.md).
