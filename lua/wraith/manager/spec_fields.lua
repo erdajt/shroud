@@ -1,4 +1,5 @@
 local M = {}
+local sources = require("wraith.manager.spec_source")
 local allowed = {name=true, repo=true, url=true, dir=true, main=true, dependencies=true, enabled=true,
   priority=true, lazy=true, cmd=true, event=true, keys=true, init=true, opts=true, config=true,
   branch=true, tag=true, commit=true, pin=true}
@@ -50,30 +51,7 @@ function M.normalize(value, descriptor)
   for key in pairs(value) do
     assert(key == 1 or allowed[key], "unknown package field: " .. tostring(key))
   end
-  assert(value[1] == nil or value.repo == nil, "choose one repository field")
-  local repo = value.repo
-  if repo == nil then repo = value[1] end
-  local sources = (repo ~= nil and 1 or 0) + (value.url ~= nil and 1 or 0) + (value.dir ~= nil and 1 or 0)
-  assert(sources == 1, "choose exactly one repo, url or dir")
-  local location, source = value.dir or value.url or repo
-  assert(type(location) == "string" and #location > 0, "package source must be a nonempty string")
-  if value.dir then
-    if location:sub(1, 1) ~= "/" then location = wraith.paths.stdpath("config") .. "/" .. location end
-    local parts = {}
-    for part in location:gmatch("[^/]+") do
-      if part == ".." then table.remove(parts) elseif part ~= "." then parts[#parts + 1] = part end
-    end
-    location = "/" .. table.concat(parts, "/")
-    source = {kind="local", dir=location}
-  elseif repo then
-    assert(repo:match("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"), "repo must be owner/repository; use url for an explicit remote")
-    source = {kind="git", url="https://github.com/" .. repo .. (repo:sub(-4) == ".git" and "" or ".git")}
-  else
-    source = {kind="git", url=location}
-  end
-
-  local basename = location:gsub("/+$", ""):match("([^/:]+)$") or ""
-  basename = basename:gsub("%.git$", "")
+  local source, basename = sources.normalize(value)
   local selected, count = {kind="head"}, 0
   for _, kind in ipairs({"branch", "tag", "commit"}) do
     if value[kind] ~= nil then selected, count = {kind=kind, value=value[kind]}, count + 1 end

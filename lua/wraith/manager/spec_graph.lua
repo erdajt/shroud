@@ -28,7 +28,7 @@ function M.normalize(input, descriptor)
     count = count + 1
     assert(depth <= 16 and count <= 1024, "package declarations exceed nesting or entry limits")
     if type(value) == "string" then
-      if dependency and not value:find("/", 1, true) then dependency(value) else
+      if dependency and not value:find("[/:]") and value ~= "~" then dependency(value) else
         local name = add(value, depth)
         if dependency then dependency(name) end
       end
@@ -44,7 +44,7 @@ function M.normalize(input, descriptor)
       imports[module] = true
       walk(require(module), depth + 1, dependency)
       imports[module] = nil
-    elseif value.repo or value.url or value.dir or value.name or type(value[1]) == "string" and #value == 1 and (not dependency or value[1]:find("/", 1, true)) then
+    elseif value.repo or value.url or value.dir or value.name or type(value[1]) == "string" and #value == 1 and (not dependency or value[1]:find("[/:]") or value[1] == "~") then
       local name = add(value, depth)
       if dependency then dependency(name) end
     else
