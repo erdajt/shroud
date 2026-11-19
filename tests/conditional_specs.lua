@@ -85,7 +85,7 @@ local function rejects(specs, settings, expected)
   assert(not ok and tostring(err):find(expected,1,true),tostring(err))
 end
 local attempted = 0
-for _, invalid in ipairs({false,"defaults",{lazy=true},{cond="yes"}}) do
+for _, invalid in ipairs({false,"defaults",{unknown=true},{cond="yes"}}) do
   rejects({{name="settings",import=function() attempted=attempted+1; return {} end}},invalid,"default")
 end
 assert(attempted==0)

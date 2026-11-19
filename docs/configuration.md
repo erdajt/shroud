@@ -86,6 +86,8 @@ specs allow 256 fragments and 63 enabled plugins. option copying allows 4096 ent
 
 ## startup order
 
+`defaults.lazy` defaults to false. when true, packages without an explicit lazy value default to lazy loading. explicit `lazy = false` still requests startup, including packages with triggers or dependency-only declarations. false preserves ordinary dependency/trigger inference. this default is applied after condition and enabled callbacks; it is not injected into their raw snapshots.
+
 plugins declared only inside `dependencies` default to lazy loading. a separate top-level declaration makes that plugin eager unless it has triggers or an explicit `lazy = true`. `lazy = false` always requests startup loading. a completed import does not create another declaration, so repeating a dependency import at the top level does not change its loading default.
 
 `priority` defaults to `50`; explicit zero and negative values remain valid. eager plugins start in descending priority, with first declaration order breaking ties. each plugin loads its dependencies before its own configuration. a high-priority lazy plugin does not pull its dependencies ahead in the startup queue.

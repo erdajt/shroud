@@ -7,8 +7,9 @@ local M = {}
 function M.normalize(input, descriptor, defaults)
   defaults = defaults == nil and {} or defaults
   assert(type(defaults) == "table", "package defaults must be a table")
-  for key in pairs(defaults) do assert(key == "cond", "unknown package default: " .. tostring(key)) end
+  for key in pairs(defaults) do assert(key == "cond" or key == "lazy", "unknown package default: " .. tostring(key)) end
   assert(defaults.cond == nil or type(defaults.cond) == "boolean" or type(defaults.cond) == "function", "default cond must be boolean or function")
+  assert(defaults.lazy == nil or type(defaults.lazy) == "boolean", "default lazy must be boolean")
   defaults = fields.copy(defaults)
 
   local collection = fragments.new(descriptor)
@@ -61,7 +62,7 @@ function M.normalize(input, descriptor, defaults)
   end
   walk(input, 1)
   local resolution = resolver.resolve(collection, defaults.cond)
-  local by_name, declared, recipes, origins = collection.finish(resolution)
+  local by_name, declared, recipes, origins = collection.finish(resolution, defaults.lazy)
 
   table.sort(declared, function(left, right)
     if left.priority ~= right.priority then return left.priority > right.priority end

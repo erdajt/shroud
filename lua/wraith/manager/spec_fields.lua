@@ -160,7 +160,7 @@ function M.declaration(value)
 end
 
 -- normalize resolves one validated merged declaration and evaluates enabled once.
-function M.normalize(value, descriptor, dependency)
+function M.normalize(value, descriptor, dependency, default_lazy)
   value = M.declaration(value)
   local source, basename = sources.normalize(value)
   local result = descriptor({name=value.name == nil and basename:lower() or value.name, source=source, selector=revision(value), pin=value.pin})
@@ -170,7 +170,7 @@ function M.normalize(value, descriptor, dependency)
   result.opts_extend = M.copy(value.opts_extend)
   result.cmd, result.event, result.keys = triggers(value, result.name)
   result.lazy = value.lazy
-  if result.lazy == nil then result.lazy = dependency == true or #result.cmd + #result.event + #result.keys > 0 end
+  if result.lazy == nil then result.lazy = dependency == true or default_lazy == true or #result.cmd + #result.event + #result.keys > 0 end
 
   result.enabled = value.enabled ~= false
   if type(value.enabled) == "function" then

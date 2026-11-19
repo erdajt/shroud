@@ -39,3 +39,43 @@ graph = normalize({
 assert(graph.ordered[1].name=="low")
 assert(table.concat(graph.start,",")=="normal,low")
 assert(parent.dependencies[1].lazy==nil and parent.priority==nil)
+
+local defaults = {lazy=true}
+local snapshots = 0
+graph = normalize({
+  {"owner/implicit",cond=function(spec)
+    assert(spec.lazy==nil)
+    snapshots=snapshots+1
+    return true
+  end,enabled=function(spec)
+    assert(spec.lazy==nil)
+    snapshots=snapshots+1
+    return true
+  end},
+  {"owner/explicit",lazy=false,cmd="activate"},
+  {"owner/parent",dependencies={{"owner/child",lazy=false,event="ready"}}},
+},defaults)
+assert(snapshots==2 and graph.by_name.implicit.lazy and graph.by_name.parent.lazy)
+assert(not graph.by_name.explicit.lazy and not graph.by_name.child.lazy)
+assert(table.concat(graph.start,",")=="explicit,child")
+
+graph = normalize({{"owner/implicit"},{"owner/command",cmd="activate"},parent},{lazy=false})
+assert(not graph.by_name.implicit.lazy and graph.by_name.command.lazy and graph.by_name.library.lazy)
+graph = normalize({{"owner/tool",lazy=true},{name="tool",lazy=false}},defaults)
+assert(not graph.by_name.tool.lazy)
+graph = normalize({{"owner/tool"},{"owner/disabled",enabled=false,specs={{name="tool",lazy=false}}}},defaults)
+assert(graph.by_name.tool.lazy and #graph.start==0)
+
+graph = normalize({{name="settings",import=function()
+  defaults.lazy=false
+  return {"owner/implicit"}
+end}},defaults)
+assert(graph.by_name.implicit.lazy and defaults.lazy==false)
+for _, invalid in ipairs({"true",1,{},function() return true end}) do
+  local calls = 0
+  local ok, err = pcall(normalize,{{name="invalid",import=function()
+    calls=calls+1
+    return {"owner/implicit"}
+  end}},{lazy=invalid})
+  assert(not ok and tostring(err):find("default lazy must be boolean",1,true) and calls==0)
+end

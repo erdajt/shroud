@@ -113,7 +113,7 @@ function M.new(descriptor)
     return record, revision
   end
 
-  function self.finish(resolution)
+  function self.finish(resolution, default_lazy)
     local by_name, declared, recipes, origins = {}, {}, {}, {}
     for _, name in ipairs(forest.order) do self.merged(name) end
     for index, name in ipairs(forest.order) do
@@ -130,7 +130,7 @@ function M.new(descriptor)
             dependencies = assert(resolution.dependencies[name], "missing resolved dependencies: " .. name)
             raw.dependencies = dependencies
           end
-          local value = fields.normalize(raw, descriptor, record.dependency_only)
+          local value = fields.normalize(raw, descriptor, record.dependency_only, default_lazy)
           value.dependencies, value.order = fields.copy(dependencies), index
           return value
         end)
