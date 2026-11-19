@@ -1,6 +1,6 @@
 # sources
 
-[readme](../README.md)
+[readme](../README.md) · [configuration](configuration.md)
 
 use a repository shorthand, full URL or explicit local directory:
 
