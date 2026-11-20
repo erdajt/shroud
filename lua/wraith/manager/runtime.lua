@@ -22,6 +22,10 @@ end
 
 function M.configure(graph, options)
 	assert(state == nil, "package manager is already configured")
+	assert(
+		wraith.capabilities.module_providers and wraith.capabilities.module_preparation,
+		"package require activation needs module preparation; update wraith"
+	)
 	local descriptors = {}
 	for _, spec in ipairs(graph.ordered) do
 		descriptors[#descriptors + 1] = require("wraith.manager.spec").descriptor({
@@ -49,6 +53,7 @@ function M.configure(graph, options)
 
 	local view = require("wraith.manager.view").new(facade, options.ui)
 	state = { graph = graph, store = store, loader = loader, selected = selected, view = view }
+	wraith.modules.provider(loader.resolver(M.load))
 	loader.initialize()
 
 	local events, event_names = {}, {}

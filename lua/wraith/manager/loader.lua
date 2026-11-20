@@ -1,6 +1,8 @@
 local copy = require("wraith.manager.spec_fields").copy
 local sources = require("wraith.manager.loader_sources")
 local options = require("wraith.manager.spec_options")
+local modules = require("wraith.manager.loader_modules")
+local ready = require("wraith.manager.loader_ready")
 local M = {}
 local wrappers = {}
 
@@ -223,12 +225,52 @@ function M.new(graph, paths, runtime, selected)
 		wrappers[identity.init], wrappers[identity.activation] = true, true
 	end
 
+	-- ensure_init initializes one absent lifecycle before activation can require its own modules.
+	local function ensure_init(name)
+		local identity = names[name].init
+		if wraith.plugins.state(identity) ~= nil then
+			return
+		end
+
+		local before = ready.capture()
+		package.loaded[identity] = nil
+		wraith.plugins.load(identity, {}, { dependency = false })
+		ready.replay(before)
+	end
+
+	-- resolver binds selected modules to this loader's actual activation identities.
+	function self.resolver(activate)
+		local choose = modules.new(graph, paths, selected, names, wraith.paths.stdpath("config"))
+		return function(name)
+			local chosen = choose(name)
+			if not chosen then
+				return
+			end
+
+			local binding = chosen.binding
+			if not binding then
+				binding = sources.prepare_module(chosen.spec, chosen.path, chosen.commit, chosen.entry)
+				binding = sources.reserve_module(chosen.spec, chosen.path, chosen.commit, binding)
+			end
+			return {
+				plugin = chosen.activation,
+				prepare = function()
+					ensure_init(chosen.name)
+				end,
+				activate = function()
+					activate(chosen.name)
+				end,
+				check = function(requested, phase, proof, executed)
+					sources.verify(chosen.spec, chosen.path, chosen.commit, binding)
+					return binding.check(requested, phase, proof, executed)
+				end,
+			}
+		end
+	end
+
 	function self.initialize()
 		for _, spec in ipairs(graph.ordered) do
-			if not self.is_managed(spec.name) then
-				package.loaded[names[spec.name].init] = nil
-				wraith.plugins.load(names[spec.name].init, {}, { dependency = false })
-			end
+			ensure_init(spec.name)
 		end
 	end
 
@@ -297,12 +339,9 @@ function M.new(graph, paths, runtime, selected)
 		local missing = chosen and chosen.error and ("package " .. name .. ": " .. chosen.error)
 			or "package is not installed; install and reload: " .. name
 		local path = assert(paths[name], missing)
-		if not self.is_managed(name) then
-			package.loaded[names[name].init] = nil
-			wraith.plugins.load(names[name].init, {}, { dependency = false })
-			if self.is_loaded(name) then
-				return
-			end
+		ensure_init(name)
+		if self.is_loaded(name) then
+			return
 		end
 
 		local commit = chosen and chosen.commit

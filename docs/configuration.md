@@ -32,7 +32,7 @@ fragments follow declaration order, including imports and nested dependencies. t
 | `dependencies` | names combine in first-seen order; nested declarations also merge |
 | `cmd`, `event` | triggers combine in first-seen order |
 | `keys` | later action replaces the same normalized key and mode |
-| `init`, `config`, `enabled`, `cond`, `lazy`, `priority`, `main`, `pin`, `dir`, `dev` | last supplied value wins |
+| `init`, `config`, `enabled`, `cond`, `lazy`, `module`, `priority`, `main`, `pin`, `dir`, `dev` | last supplied value wins |
 
 `opts_extend` takes effect from its declaration onward. it does not change earlier merges. an empty list resets extension paths. when both inherited and new targets are tables, both must be lists; otherwise the value follows normal merge rules. duplicate key aliases inside one fragment remain an error; overrides belong in separate fragments.
 
@@ -102,7 +102,7 @@ without `opts` or a truthy `config`, activation exposes the package path without
 
 `config = function(plugin, opts) ... end` owns setup and any require calls. its returned cleanup function runs on unload; shroud does not infer a module teardown for that callback. automatic setup retains its returned cleanup and the module's `teardown`, each called once on unload or failed publication.
 
-unlike lazy.nvim's logged setup errors, failed shroud setup rejects activation and rolls back owned registrations. its original lazy trigger remains available for retry. require caches, runtime paths and arbitrary external effects remain outside that rollback.
+unlike lazy.nvim's logged setup errors, failed shroud setup rejects activation and rolls back owned registrations. its original lazy trigger remains available for retry. newly executed, verified module caches are cleared after rollback cleanup. runtime paths, retained Lua references and arbitrary external effects remain outside that rollback.
 
 ## ready subscribers
 
@@ -116,13 +116,25 @@ explicit `main` selects that module inside the installed plugin. otherwise, auto
 
 name matching lowercases names, strips `wraith-`, `.wraith`, `.lua` and `-lua` affixes, and ignores separators. digits remain significant. exact module names use dotted identifiers; each part starts with a letter or underscore. `shroud` and `wraith.manager` namespaces are reserved. two explicit `main` declarations cannot claim the same name, even when configuration is skipped.
 
-inferred setup loads the selected file through native `require` caching. it cannot fall back to a same-named configuration file or global preload. explicit `main` may select a deliberate `package.preload` function; diagnostics label that source `preload`. custom config controls its own require calls. libraries without setup do not claim an entrypoint. binding every plugin submodule is a separate capability, not provided by entrypoint selection.
+inferred setup loads the selected file through native `require` caching. it cannot fall back to a same-named configuration file or global preload. explicit `main` may select a deliberate `package.preload` function; diagnostics label that source `preload`. custom config controls its own require calls. libraries without setup do not infer a main; their requested modules use the [require activation](#require-activation) resolver.
 
 callbacks receive the declared `main`, which stays nil when inferred. status reports `requested_main`, `selected_main`, `loaded_main`, `main_source_kind` and `main_source_path` separately. `loaded_main` exists only during active automatic setup. selected provenance survives unload and failed publication; a checkout commit does not identify a synthetic preload's code.
 
-once exposed, package source, checkout, requested main and resolved entrypoint remain fixed for the runtime. changing them requires `/reload`. unknown cached modules are rejected before setup. clearing an owned cache permits the same source to load again; it does not permit a source change. ordinary source exceptions retry when native require cleared its own marker. setup failures reuse the owned module. source errors that changed the cache or preload require reload.
+once exposed, package source, checkout, requested main and resolved entrypoint remain fixed for the runtime. changing them requires `/reload`. unknown cached modules are rejected before setup. clearing an owned cache permits the same source to load again; it does not permit a source change. ordinary source exceptions retry when native require cleared its own marker. failed activation clears newly executed verified caches after cleanup; a previously loaded owned cache can remain available. source errors that changed the cache or preload require reload.
 
 a timed-out entry load requires `/reload` because its Lua bookkeeping may not finish. shroud preserves source-written cache values and never adopts them after interruption. managed source failures include source stack traces as diagnostic strings. replacing package/cache/preload tables before manager loading is unsupported; replacing captured tables afterward is rejected. direct calls to the manager's private preload wrappers are unsupported; use `require` or a [bound source loader](https://github.com/erdajt/wraith/blob/main/docs/lua/modules.md).
+
+## require activation
+
+`require("tool.part")` can activate an installed lazy plugin before loading that exact module. namespace directories do not need their own `init.lua`. declared dependencies load first; default setup and custom config run once per activation. custom config can require the same requested module. an init callback can require its own plugin during initial setup and after an accepted unload. initialization runs before activation preparation completes, including when require is called from a coroutine.
+
+`module = false` disables activation through require while the plugin is unloaded. use `require("shroud").load("plugin-name")` first; require then routes its main and submodules through the active plugin owner. a previously claimed module from an unloaded `module = false` plugin reports the manual-load requirement.
+
+previously claimed modules keep their selected source. for an unclaimed name, existing cache/preload entries and the normal configuration paths take precedence: `lua/name.lua`, `lua/name/init.lua`, `name.lua`, then `name/init.lua`. installed plugin roots are searched next. one matching plugin wins; multiple matches require a unique normalized plugin-name match to the root module segment. otherwise require reports the candidates. this managed lookup precedes arbitrary extra `package.path` entries and custom searchers; it does not reproduce every native loader ordering.
+
+source verification runs before activation and native execution, including imports made by custom config after dependency callbacks. changing a claimed path, checkout, inferred main or preload requires `/reload`. edits to source bytes at the same local path remain available on the next uncached execution. registrations made by module source belong to its active plugin. the resolver belongs to the manager runtime. imports made by another plugin create real unload dependencies.
+
+use manager `unload` or `unload_all` for managed plugins. they unload init and active owners together and reject dependents outside the requested group. accepted unload runs cleanup before clearing verified owned module caches; rejected publication restores the live owners. foreign cache replacements are preserved and require reload. retained Lua references are ordinary references, so clearing a cache does not revoke values already held by callers. the synthetic `wraith.manager.package.*` lifecycle names are internal; direct mutation or unloading is unsupported.
 
 ## development selection
 
