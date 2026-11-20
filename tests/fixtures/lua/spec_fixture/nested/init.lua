@@ -1,1 +1,1 @@
-return {{name="example",opts={order={"nested"}}}}
+return { { name = "example", opts = { order = { "nested" } } } }
