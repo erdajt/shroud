@@ -11,6 +11,8 @@ local function loaded()
 end
 
 function M.new(graph, paths, runtime, selected)
+  assert(wraith.capabilities.plugins_state and wraith.capabilities.plugins_unload_many,
+    "package lifecycle requires plugin state and grouped unload; update wraith")
   local self, names, generation = {}, {}, 0
   selected = selected or {}
   local watched, event_names = {ready=true}, {"ready"}
@@ -64,7 +66,7 @@ function M.new(graph, paths, runtime, selected)
         wraith.plugins.depend(runtime)
         if spec.init then cleanup = spec.init(copy(spec)) end
         assert(cleanup == nil or type(cleanup) == "function", "package init must return a cleanup function or nil")
-        init.arm()
+        if not self.is_loaded(spec.name) then init.arm() end
       end
       function init.teardown()
         local callback = cleanup
@@ -83,7 +85,7 @@ function M.new(graph, paths, runtime, selected)
           previous[event] = {}
           for _, id in ipairs(wraith.events.listeners(event)) do previous[event][id] = true end
         end
-        wraith.plugins.depend(identity.init)
+        wraith.plugins.depend(runtime)
         for _, dependency in ipairs(spec.dependencies) do wraith.plugins.depend(names[dependency].activation) end
         local result
         if spec.config or spec.opts ~= nil then
@@ -148,7 +150,10 @@ function M.new(graph, paths, runtime, selected)
 
   function self.initialize()
     for _, spec in ipairs(graph.ordered) do
-      wraith.plugins.load(names[spec.name].init, {}, {dependency=false})
+      if not self.is_managed(spec.name) then
+        package.loaded[names[spec.name].init] = nil
+        wraith.plugins.load(names[spec.name].init, {}, {dependency=false})
+      end
     end
   end
   function self.states()
@@ -193,13 +198,16 @@ function M.new(graph, paths, runtime, selected)
     if not self.is_managed(name) then
       package.loaded[names[name].init] = nil
       wraith.plugins.load(names[name].init, {}, {dependency=false})
+      if self.is_loaded(name) then return end
     end
     local commit = chosen and chosen.commit
     local binding = sources.prepare(spec, path, commit)
     for _, dependency in ipairs(spec.dependencies) do self.load(dependency) end
     sources.reserve(spec, path, commit, binding)
     wraith.runtimepath.append(path)
-    wraith.plugins.call(names[name].init, "disarm")
+    if wraith.plugins.state(names[name].init) ~= "loading" then
+      wraith.plugins.call(names[name].init, "disarm")
+    end
     package.loaded[names[name].activation] = nil
     wraith.plugins.load(names[name].activation, {}, {dependency=false})
   end
@@ -211,18 +219,19 @@ function M.new(graph, paths, runtime, selected)
   end
   function self.unload(name)
     assert(names[name], "unknown package: " .. tostring(name))
-    if self.is_loaded(name) then wraith.plugins.unload(names[name].activation) end
-    if self.is_managed(name) then wraith.plugins.unload(names[name].init) end
+    local cohort = {}
+    if self.is_loaded(name) then cohort[#cohort + 1] = names[name].activation end
+    if self.is_managed(name) then cohort[#cohort + 1] = names[name].init end
+    wraith.plugins.unload_many(cohort)
   end
   function self.unload_all()
-    for index = #graph.ordered, 1, -1 do
-      local name = graph.ordered[index].name
-      if self.is_loaded(name) then wraith.plugins.unload(names[name].activation) end
+    local active, cohort = loaded(), {}
+    for _, spec in ipairs(graph.ordered) do
+      local identity = names[spec.name]
+      if active[identity.activation] then cohort[#cohort + 1] = identity.activation end
+      if active[identity.init] then cohort[#cohort + 1] = identity.init end
     end
-    for index = #graph.ordered, 1, -1 do
-      local name = graph.ordered[index].name
-      if self.is_managed(name) then wraith.plugins.unload(names[name].init) end
-    end
+    wraith.plugins.unload_many(cohort)
   end
   return self
 end
