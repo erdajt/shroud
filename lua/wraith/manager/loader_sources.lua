@@ -8,6 +8,11 @@ function M.automatic(spec)
 	return type(spec.config) ~= "function" and (spec.config or spec.opts ~= nil)
 end
 
+-- exposed includes failed and retired activations whose source identity remains reserved.
+function M.exposed(name)
+	return selected[name] ~= nil
+end
+
 -- lookup returns the sole binding for a module without exposing package identity records.
 function M.lookup(name)
 	local record = modules[name]
