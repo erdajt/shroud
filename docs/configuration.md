@@ -141,3 +141,9 @@ use manager `unload` or `unload_all` for managed plugins. they unload init and a
 set per-plugin `dev` or setup `dev.path`, `dev.patterns` and `dev.fallback` to select [development copies](sources.md#development-copies). settings are validated and detached before imports run. all changed declarations pass merged selector and trigger checks before their path callbacks run. scoped overrides use the last surviving `dir` and `dev`; removing an override restores the surviving source choice.
 
 path callbacks receive a detached merged snapshot. cond and enabled snapshots include the selected local directory and development state. init, opts and config receive normalized source metadata; declared remote revision intent remains separate from the local source used for activation.
+
+## pending installation work
+
+[installation selection](sources.md) and continuation delivery are separate. the private continuation module retains pending work as owned event subscriptions, with at most 16 receipts. waking an operation only schedules an attempt; the attempt must inspect current installation state before loading code. automatic installation is not connected to this module yet.
+
+attempts run under the normal callback budget. accepted completion removes the receipt; a failed or rejected callback restores it and rolls back staged host changes. duplicate scheduled attempts skip a consumed receipt. already queued attempts can retry after failure or rejection; the module schedules no new retry itself. discarded schedules leave work pending for an explicit wake or cancellation. unload removes the owning runtime's work. these receipts do not guarantee durable delivery or undo external effects performed by plugin code.
