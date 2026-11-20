@@ -58,3 +58,9 @@ require("shroud").setup({
 path callbacks see `name`, the declared `url`, original revision fields and `dev = true`, with no selected `dir` yet. cond and enabled callbacks see the selected `dir` and `dev`; remote fallback has `dev = false` and no local directory. selection is cached per surviving fragment revision. removing a scope recomputes changed plugins; removing only a dependency edge does not rerun the path callback. each normalization permits at most 1024 path callback invocations. disabled or optional plugins may run path callbacks before pruning.
 
 normalization does not fetch or run git. local copies preserve their files and use no operational git selector or pin. remote fallback keeps the declared selector and pin. status reports `dev` and detached `declared_source`, `declared_selector` and `declared_pin` from the selected configuration. switching a source already exposed to Lua requires `/reload`; a disappearing local directory does not trigger a mid-load remote fetch.
+
+## installation availability
+
+inspection reports `availability` as `available`, `absent` or `blocked`. `absent` means a missing checkout or local path; `blocked` includes nondirectory components, managed symlinks, broken links, inaccessible paths and source conflicts. managed root, object namespace and checkout components must be directories without final symlinks. valid directory symlinks above the managed root remain supported; local sources can follow directory symlinks.
+
+missing paths are checked through at most 128 ancestor candidates, including the original path. an unresolved deeper path is blocked. metadata is cached only within one inspection. availability is not a fresh Git integrity check or permission to download. a usable checkout keeps its existing selection when configured selector or pin changes; planning and adoption validate revision intent separately.
