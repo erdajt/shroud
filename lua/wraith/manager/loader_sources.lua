@@ -196,6 +196,30 @@ function M.reserve_module(spec, path, commit, binding)
 	return publish(spec, path, commit, binding, entry)
 end
 
+-- verify rechecks canonical source metadata without publishing or executing a module.
+function M.verify(spec, path, commit, binding)
+	M.check(spec, path, commit)
+	local prior = selected[spec.name]
+	local name = binding.entry.name
+	local record = modules[name]
+	assert(
+		prior and record and record.package == spec.name and rawequal(record.binding, binding),
+		"package module binding is not canonical; use /reload: " .. name
+	)
+
+	local entry
+	if prior.main == name then
+		entry = entries.select(spec, path, binding, function(main)
+			return claim(spec.name, main)
+		end)
+	else
+		entry = wraith.modules.source(path, name)
+		assert(entry, "package requested module has no exact file source: " .. name)
+	end
+	matching(binding.entry, entry, spec.name)
+	binding.check()
+end
+
 -- require follows the package's pinned main through the module ledger.
 function M.require(name)
 	local prior = selected[name]
