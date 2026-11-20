@@ -104,6 +104,12 @@ without `opts` or a truthy `config`, activation exposes the package path without
 
 unlike lazy.nvim's logged setup errors, failed shroud setup rejects activation and rolls back owned registrations. its original lazy trigger remains available for retry. require caches, runtime paths and arbitrary external effects remain outside that rollback.
 
+## ready subscribers
+
+subscribers created before the first workspace `ready` broadcast receive that broadcast. subscribers added later by package source or setup receive catchup after the host accepts their activation. nested loads share host replay deduplication within the current effect batch, so overlapping source and setup captures do not deliver the same catchup twice.
+
+failed or rejected activation discards its pending replay effects. this is transactional catchup, not durable delivery across abandoned effect chains. other triggering events retain their separate, targeted dispatch. explicit `events.dispatch` calls remain independent of [ready replay](https://github.com/erdajt/wraith/blob/main/docs/plugins.md).
+
 ## entrypoints
 
 explicit `main` selects that module inside the installed plugin. otherwise, automatic setup inspects immediate files and directories with `init.lua` under its `lua/` directory. it selects one normalized name match, then a sole candidate. missing or ambiguous candidates require `main` or a custom `config` function.

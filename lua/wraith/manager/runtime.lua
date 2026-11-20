@@ -1,4 +1,5 @@
 local fields = require("wraith.manager.spec_fields")
+local ready = require("wraith.manager.loader_ready")
 local copy = fields.copy
 local M, state = {}, nil
 local runtime = "wraith.manager.runtime"
@@ -13,21 +14,6 @@ local function require_active(name)
 			.. (excluded and excluded.reason or "")
 			.. "); change its configuration and reload"
 	)
-end
-
-local function fresh_listeners(event, before)
-	local seen, result = {}, {}
-	for _, id in ipairs(before) do
-		seen[id] = true
-	end
-
-	for _, id in ipairs(wraith.events.listeners(event)) do
-		if not seen[id] then
-			result[#result + 1] = id
-		end
-	end
-
-	return result
 end
 
 function M.setup()
@@ -183,13 +169,9 @@ function M.load(name)
 	assert(state, "package manager is not configured")
 	require_active(name)
 
-	local before = wraith.events.listeners("ready")
+	local before = ready.capture()
 	state.loader.load(name)
-
-	local listeners = fresh_listeners("ready", before)
-	if #listeners > 0 then
-		wraith.events.dispatch("ready", nil, { listeners = listeners })
-	end
+	ready.replay(before)
 end
 
 function M.trigger(name, kind, data)
@@ -199,7 +181,7 @@ end
 
 function M.on_event(event, data, observed, cohort)
 	assert(state, "package manager is not configured")
-	local ready, selected, existing = wraith.events.listeners("ready"), {}, {}
+	local before, selected, existing = ready.capture(), {}, {}
 	for _, id in ipairs(observed) do
 		existing[id] = true
 	end
@@ -218,15 +200,14 @@ function M.on_event(event, data, observed, cohort)
 		end
 	end
 	if #listeners > 0 then
-		wraith.events.dispatch(event, data, { listeners = listeners })
-	end
-
-	if event ~= "ready" then
-		local added = fresh_listeners("ready", ready)
-		if #added > 0 then
-			wraith.events.dispatch("ready", nil, { listeners = added })
+		if event == "ready" then
+			wraith.events.replay_ready(listeners)
+		else
+			wraith.events.dispatch(event, data, { listeners = listeners })
 		end
 	end
+
+	ready.replay(before)
 end
 
 function M.unload(name)

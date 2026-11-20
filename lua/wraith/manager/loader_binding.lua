@@ -1,3 +1,4 @@
+local ready = require("wraith.manager.loader_ready")
 local M = {}
 local globals, original = _G, package
 local loaded, preloads = rawget(original, "loaded"), rawget(original, "preload")
@@ -105,8 +106,18 @@ function M.new(entry)
 		assert(serial < 9007199254740991, "package entry execution serial exhausted; use /reload: " .. name)
 
 		local marker = rawget(loaded, name)
+		local before = ready.capture()
 		running = true
-		local ok, value = xpcall(source, function(failure)
+		local ok, value = xpcall(function()
+			local result = source()
+			assert(tables(), "package tables were replaced during entry load; use /reload: " .. name)
+			assert(
+				rawget(preloads, name) == wrapper,
+				"package entry preload changed during load; use /reload: " .. name
+			)
+			ready.replay(before)
+			return result
+		end, function(failure)
 			return traceback(describe(failure), 2)
 		end)
 		running = false
