@@ -37,7 +37,9 @@ a named declaration can add or replace a local directory before or after the rem
 
 HTTP, credentials embedded in URLs, query strings, fragments, control characters and option-shaped hosts or refs are rejected. configure authentication through the manager's git environment options. installing a plugin grants it your user account's permissions.
 
-open `/packages` to inspect and install Git packages. after installation, `/reload` loads the selected revisions into a fresh runtime. automatic installation and the remaining lazy.nvim workflows are still being implemented.
+open `/packages` to inspect and install Git packages. a first usable installation becomes available in the current runtime after completion or an explicit `load`. local directories created after setup can also become available on `load`. automatic installation and the remaining lazy.nvim workflows are still being implemented.
+
+available selections stay fixed for the runtime, even before their first activation. updates require `/reload`; failed or unloaded source reservations also keep their identity. a missing checkout observed at commit A can adopt a first usable commit B when source, selector and pin still match. installation choices come from the validated lock and inspected paths, never from a completion message alone. a committed choice may survive rejected UI publication; an explicit `load` reconciles it without fetching again. status remains observational. package-row `restart_required` compares the current disk installation with the selected source; the storage operation's `restart_required` list records changed revisions and does not account for runtime adoption.
 
 ## development copies
 

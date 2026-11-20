@@ -35,7 +35,10 @@ package.preload.fragment_test = function()
 	return {
 		setup = function() end,
 		configure = function()
-			loader = require("wraith.manager.loader").new(graph, { tool = "/tmp/tool" }, "fragment_test")
+			local installations = require("wraith.manager.loader_installations").new(graph, {
+				{ name = "tool", path = "/tmp/tool" },
+			})
+			loader = require("wraith.manager.loader").new(graph, installations, "fragment_test")
 			loader.initialize()
 			assert(calls.init == 1 and calls.opts == 0 and calls.config == 0)
 			loader.load("tool")

@@ -22,7 +22,12 @@ end
 
 local function exercise(specs, paths, run)
 	local graph = schema.normalize(specs)
-	local loader = loaders.new(graph, paths, "entry_activation_test")
+	local rows = {}
+	for _, spec in ipairs(graph.ordered) do
+		rows[#rows + 1] = { name = spec.name, path = paths[spec.name] }
+	end
+	local installations = require("wraith.manager.loader_installations").new(graph, rows)
+	local loader = loaders.new(graph, installations, "entry_activation_test")
 	loader.initialize()
 	run(loader, graph)
 	loader.unload_all()
@@ -191,11 +196,11 @@ package.preload.entry_activation_test = function()
 				end
 			)
 			rejects(function()
-				loaders.new(
-					schema.normalize({ { name = "correctable", dir = empty, opts = {}, lazy = true } }),
-					{ correctable = empty },
-					"entry_activation_test"
-				)
+				local graph = schema.normalize({ { name = "correctable", dir = empty, opts = {}, lazy = true } })
+				local installations = require("wraith.manager.loader_installations").new(graph, {
+					{ name = "correctable", path = empty },
+				})
+				loaders.new(graph, installations, "entry_activation_test")
 			end, "source changed")
 
 			local parent =

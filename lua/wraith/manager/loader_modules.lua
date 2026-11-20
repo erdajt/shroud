@@ -24,8 +24,8 @@ local function config_source(path)
 	return false
 end
 
--- new freezes installed roots while allowing new files inside those roots to be discovered.
-function M.new(graph, paths, selected, names, config_root)
+-- new freezes declarations while reading shared first-usable installation choices.
+function M.new(graph, installations, names, config_root)
 	assert(
 		type(config_root) == "string"
 			and config_root:sub(1, 1) == "/"
@@ -51,12 +51,10 @@ function M.new(graph, paths, selected, names, config_root)
 			spec.opts = {}
 		end
 
-		local chosen, identity = selected[source.name], names[source.name]
+		local identity = names[source.name]
 		local record = {
 			name = source.name,
 			spec = spec,
-			path = paths[source.name],
-			commit = chosen and chosen.commit,
 			activation = assert(identity and identity.activation, "package activation is missing"),
 		}
 		ordered[#ordered + 1], by_name[record.name] = record, record
@@ -65,6 +63,21 @@ function M.new(graph, paths, selected, names, config_root)
 
 	for name, reason in pairs(graph.excluded or {}) do
 		excluded[name] = reason.reason
+	end
+
+	-- current captures one installation without retaining a second selection authority.
+	local function current(record)
+		if not record then
+			return
+		end
+		local chosen = installations.get(record.name)
+		return {
+			name = record.name,
+			spec = record.spec,
+			activation = record.activation,
+			path = chosen.path,
+			commit = chosen.commit,
+		}
 	end
 
 	-- result detaches selection metadata without copying the canonical binding or bound loader.
@@ -101,7 +114,7 @@ function M.new(graph, paths, selected, names, config_root)
 		local owner, binding = sources.lookup(name)
 		local active = {}
 		if owner then
-			local record = by_name[owner]
+			local record = current(by_name[owner])
 			assert(
 				record and record.path,
 				"module "
@@ -147,7 +160,8 @@ function M.new(graph, paths, selected, names, config_root)
 
 		local candidates, preferred = {}, {}
 		local root = entries.normalized(name:match("^[^.]+"))
-		for _, record in ipairs(ordered) do
+		for _, declaration in ipairs(ordered) do
+			local record = current(declaration)
 			if record.path and (record.spec.module ~= false or active[record.activation]) then
 				local ok, entry = pcall(wraith.modules.source, record.path, name)
 				assert(ok, "package " .. record.name .. " module " .. name .. ": " .. tostring(entry))

@@ -14,7 +14,12 @@ local function fixture(name, source)
 end
 
 local function create(specs, paths)
-	active_loader = loaders.new(schema.normalize(specs), paths, runtime)
+	local graph, rows = schema.normalize(specs), {}
+	for _, spec in ipairs(graph.ordered) do
+		rows[#rows + 1] = { name = spec.name, path = paths[spec.name] }
+	end
+	local installations = require("wraith.manager.loader_installations").new(graph, rows)
+	active_loader = loaders.new(graph, installations, runtime)
 	return active_loader
 end
 
@@ -38,10 +43,13 @@ package.preload[runtime] = function()
 			local capability_path = fixture("capability_probe", "return {}")
 			local capability_graph =
 				schema.normalize({ { name = "capability_probe", dir = capability_path, lazy = true } })
+			local installations = require("wraith.manager.loader_installations").new(capability_graph, {
+				{ name = "capability_probe", path = capability_path },
+			})
 			for _, name in ipairs({ "plugins_state", "plugins_unload_many" }) do
 				local previous = wraith.capabilities[name]
 				wraith.capabilities[name] = false
-				local ok, err = pcall(loaders.new, capability_graph, { capability_probe = capability_path }, runtime)
+				local ok, err = pcall(loaders.new, capability_graph, installations, runtime)
 				wraith.capabilities[name] = previous
 				assert(not ok and tostring(err):find("update wraith", 1, true))
 				assert(package.preload["wraith.manager.package.capability_probe.init"] == nil)

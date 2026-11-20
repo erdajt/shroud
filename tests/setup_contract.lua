@@ -76,7 +76,12 @@ package.preload.setup_test = function()
 		setup = function() end,
 		run = function()
 			local graph = require("wraith.manager.spec").normalize(declarations)
-			local loader = require("wraith.manager.loader").new(graph, paths, "setup_test")
+			local rows = {}
+			for _, spec in ipairs(graph.ordered) do
+				rows[#rows + 1] = { name = spec.name, path = paths[spec.name] }
+			end
+			local installations = require("wraith.manager.loader_installations").new(graph, rows)
+			local loader = require("wraith.manager.loader").new(graph, installations, "setup_test")
 			loader.initialize()
 			for _, spec in ipairs(declarations) do
 				loader.load(spec.name)

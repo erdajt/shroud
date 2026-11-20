@@ -162,7 +162,8 @@ function M.new(manager, options)
 			lines[#lines + 1] = "remove lock entry: " .. text(name, 128) .. " (files retained)"
 		end
 
-		lines[#lines + 1] = "installed changes take effect after reload; local directories are never modified"
+		lines[#lines + 1] =
+			"first installations can load without reload; updates require reload; local directories are never modified"
 		details("package plan", lines, function()
 			wraith.ui.select(
 				{ { id = "apply", label = "apply reviewed plan" }, { id = "cancel", label = "cancel" } },

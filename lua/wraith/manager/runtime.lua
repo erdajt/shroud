@@ -38,12 +38,8 @@ function M.configure(graph, options)
 	end
 
 	local store = require("wraith.manager.store").new(descriptors, options.storage, graph.retain_lock)
-	local rows, paths, selected = store.inspect(), {}, {}
-	for _, row in ipairs(rows) do
-		paths[row.name], selected[row.name] = row.path, copy(row)
-	end
-
-	local loader = require("wraith.manager.loader").new(graph, paths, runtime, selected)
+	local installations = require("wraith.manager.loader_installations").new(graph, store.inspect())
+	local loader = require("wraith.manager.loader").new(graph, installations, runtime)
 	local facade = {}
 	for _, method in ipairs({ "status", "plan", "execute", "cancel", "load", "unload" }) do
 		facade[method] = function(...)
@@ -52,7 +48,7 @@ function M.configure(graph, options)
 	end
 
 	local view = require("wraith.manager.view").new(facade, options.ui)
-	state = { graph = graph, store = store, loader = loader, selected = selected, view = view }
+	state = { graph = graph, store = store, loader = loader, installations = installations, view = view }
 	wraith.modules.provider(loader.resolver(M.load))
 	loader.initialize()
 
@@ -122,7 +118,7 @@ function M.status()
 	local rows, lock = state.store.inspect()
 	local states = state.loader.states()
 	for _, row in ipairs(rows) do
-		local chosen = state.selected[row.name]
+		local chosen = state.installations.get(row.name)
 		row.loaded, row.managed = states[row.name].loaded, states[row.name].managed
 		row.installed = row.path ~= nil
 		local spec = state.graph.by_name[row.name]
@@ -173,6 +169,7 @@ end
 function M.load(name)
 	assert(state, "package manager is not configured")
 	require_active(name)
+	state.loader.refresh(state.store.inspect())
 
 	local before = ready.capture()
 	state.loader.load(name)
@@ -186,6 +183,7 @@ end
 
 function M.on_event(event, data, observed, cohort)
 	assert(state, "package manager is not configured")
+	state.loader.refresh(state.store.inspect())
 	local before, selected, existing = ready.capture(), {}, {}
 	for _, id in ipairs(observed) do
 		existing[id] = true
@@ -243,10 +241,19 @@ end
 
 function M.execute(id)
 	assert(state, "package manager is not configured")
-	return state.store.execute(id, function()
-		state.view.refresh()
+	local current = state
+	return current.store.execute(id, function()
+		if state == current then
+			current.view.refresh()
+		end
 	end, function(result)
-		state.view.refresh()
+		if state ~= current then
+			return
+		end
+		if result.state == "installed" then
+			current.loader.refresh(current.store.inspect())
+		end
+		current.view.refresh()
 		if result.error then
 			wraith.notify("packages: " .. result.error)
 		end

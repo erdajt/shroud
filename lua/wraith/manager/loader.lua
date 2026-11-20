@@ -14,13 +14,12 @@ local function loaded()
 	return result
 end
 
-function M.new(graph, paths, runtime, selected)
+function M.new(graph, installations, runtime)
 	assert(
 		wraith.capabilities.plugins_state and wraith.capabilities.plugins_unload_many,
 		"package lifecycle requires plugin state and grouped unload; update wraith"
 	)
 	local self, names, generation = {}, {}, 0
-	selected = selected or {}
 	local watched, event_names = { ready = true }, { "ready" }
 	for _, spec in ipairs(graph.ordered) do
 		for _, event in ipairs(spec.event) do
@@ -33,7 +32,8 @@ function M.new(graph, paths, runtime, selected)
 	table.sort(event_names)
 
 	for _, spec in ipairs(graph.ordered) do
-		sources.check(spec, paths[spec.name], selected[spec.name] and selected[spec.name].commit)
+		local chosen = installations.get(spec.name)
+		sources.check(spec, chosen.path, chosen.commit)
 	end
 
 	local active = loaded()
@@ -240,7 +240,7 @@ function M.new(graph, paths, runtime, selected)
 
 	-- resolver binds selected modules to this loader's actual activation identities.
 	function self.resolver(activate)
-		local choose = modules.new(graph, paths, selected, names, wraith.paths.stdpath("config"))
+		local choose = modules.new(graph, installations, names, wraith.paths.stdpath("config"))
 		return function(name)
 			local chosen = choose(name)
 			if not chosen then
@@ -266,6 +266,15 @@ function M.new(graph, paths, runtime, selected)
 				end,
 			}
 		end
+	end
+
+	-- refresh adopts only previously unavailable and unexposed installations.
+	function self.refresh(rows, lock)
+		local active = {}
+		for name, identity in pairs(names) do
+			active[name] = wraith.plugins.state(identity.activation) ~= nil
+		end
+		installations.adopt(rows, lock, active)
 	end
 
 	function self.initialize()
@@ -335,10 +344,10 @@ function M.new(graph, paths, runtime, selected)
 			return
 		end
 
-		local chosen = selected[name]
+		local chosen = installations.get(name)
 		local missing = chosen and chosen.error and ("package " .. name .. ": " .. chosen.error)
-			or "package is not installed; install and reload: " .. name
-		local path = assert(paths[name], missing)
+			or "package is not installed; install and load: " .. name
+		local path = assert(chosen.path, missing)
 		ensure_init(name)
 		if self.is_loaded(name) then
 			return
